@@ -18,7 +18,7 @@ using namespace Rcpp;
 double comp_sco3_c(double ylat,double xlon,int jday,double ro3,double rad) {
     double rlat = ylat/rad;
     double rlon = xlon/rad;
-    double to3 = 235.0 + (150.0+40.0*sin(0.9865*(jday-30.0)) + 20.0*sin(3.0*(rlon)))*sin(1.28*rlat)*sin(1.28*rlat);
+    // double to3 = 235.0 + (150.0+40.0*sin(0.9865*(jday-30.0)) + 20.0*sin(3.0*(rlon)))*sin(1.28*rlat)*sin(1.28*rlat);
     if (ro3 > 0) {
         to3 = ro3;
     } else {
