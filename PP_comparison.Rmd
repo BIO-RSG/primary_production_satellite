@@ -1,0 +1,83 @@
+---
+title: "PP model comparisons"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+library(data.table)
+library(oceancolouR)
+library(raster)
+library(ggplot2)
+library(rasterVis)
+library(patchwork)
+library(dplyr)
+library(ncdf4)
+```
+
+Collecting maps of input variables and the resulting PP maps using different models, for comparison:  
+
+
+```{r, fig.height=10, fig.width=10}
+xlims <- c(-95,-42)
+ylims <- c(39,82)
+canada <- map_data("world")
+
+# get input and pp for bio_v1_carla
+bio_v1_input <- dplyr::bind_cols(fread("model_comparisons/BIO_v1_Carla/201807_LHTBI.csv"),
+                                 fread("model_comparisons/BIO_v1_Carla/201807_pi-20141113.csv"))
+rast_alphab <- var_to_rast(bio_v1_input %>% dplyr::select(Name,alphaB), ext=c(xlims,ylims))
+rast_pmb <- var_to_rast(bio_v1_input %>% dplyr::select(Name,PmB), ext=c(xlims,ylims))
+rast_chl <- var_to_rast(bio_v1_input %>% dplyr::mutate(chl=log10(chlor_a)) %>% dplyr::select(Name,chl), ext=c(xlims,ylims))
+pp <- dplyr::bind_cols(bio_v1_input %>% dplyr::select(Name),
+                       fread("model_comparisons/BIO_v1_Carla/201807_pp.csv")) %>%
+  dplyr::filter(cppday >= 0)
+rast_pp <- var_to_rast(pp %>% dplyr::select(Name, cppday), ext=c(xlims,ylims))
+
+# get vgpm pp
+rast_vgpm <- raster("model_comparisons/VGPM/vgpm.2018182.hdf")
+extent(rast_vgpm) <- extent(c(xmin=-180,xmax=180,ymin=-90,ymax=90))
+rast_vgpm <- crop(rast_vgpm, extent(c(xlims,ylims)))
+rast_vgpm[rast_vgpm < 0] <- NA
+
+make_map <- function(rast,title,use_lims=TRUE) {
+    cm <- colorRampPalette(c("#00007F","blue","#007FFF","cyan","#7FFF7F","yellow","#FF7F00","red","#7F0000"))(100)
+    p <- rasterVis::gplot(rast) +
+      geom_tile(aes(fill = value)) +
+      geom_map(data = canada, map = canada, aes(x = long, y = lat, group = group, map_id=region), fill = "white", colour = "#7f7f7f", size=0.5) +
+      scale_x_continuous(expand=c(0,0), limits=xlims) +
+      scale_y_continuous(expand=c(0,0), limits=ylims) +
+      coord_fixed(1.5) +
+      theme_bw() +
+      ggtitle(title) +
+      theme(strip.background=element_blank(),
+            strip.text=element_blank(),
+            axis.title.x=element_blank(),
+            axis.title.y=element_blank(),
+            legend.title=element_blank(),
+            legend.position="bottom",
+            legend.direction="horizontal",
+            legend.text=element_text(angle=45,hjust=1))
+    if (use_lims) {
+      rvals <- values(rast)
+      rmedian <- median(rvals,na.rm=TRUE)
+      rsd <- sd(rvals,na.rm=TRUE)
+      rlims <- c(max(0,rmedian-3*rsd),rmedian+3*rsd)
+      rast[rast<rlims[1]] <- rlims[1]
+      rast[rast>rlims[2]] <- rlims[2]
+      p <- p + scale_fill_gradientn(colours = cm, limits=rlims)
+    } else {
+      p <- p + scale_fill_gradientn(colours = cm)
+    }
+    return(p)
+}
+
+r1 <- make_map(rast_alphab, "alphaB - BIO_v1 (from Carla)",use_lims=FALSE)
+r2 <- make_map(rast_pmb, "PmB - BIO_v1 (from Carla)",use_lims=FALSE)
+r3 <- make_map(rast_chl, "log10(chl) - BIO_v1 (from Carla)",use_lims=FALSE)
+r4 <- make_map(rast_pp, "Daily PP - BIO_v1 (from Carla)")
+r5 <- make_map(rast_vgpm, "Daily PP - VGPM")
+
+wrap_plots(list(r1,r2,r3,r4,r5),nrow=2,byrow=TRUE)
+
+```
