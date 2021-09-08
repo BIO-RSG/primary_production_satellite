@@ -13,7 +13,84 @@ asw <- res$y
 
 
 #*******************************************************************************
-# R FUNCTION ####
+# R FUNCTIONS ####
+
+full_PP_calc <- function(df) {
+    
+    df <- as.numeric(df)
+    latipxl <- df[1]
+    daypxl <- df[2]
+    yearpxl <- df[3]
+    SatPAR <- df[4]
+    chlpix <- df[5]
+    alphaB <- df[6]
+    PBm <- df[7]
+    
+    # GET SURFACE PAR
+    presolved <- PAR_resolved(latipxl = latipxl,
+                              daypxl = daypxl,
+                              yearpxl = yearpxl,
+                              SatPAR = SatPAR)
+    Eqdifw <- presolved$Eqdifw
+    Eqdirw <- presolved$Eqdirw
+    zendR <- presolved$zendR
+    zendw <- presolved$zendw
+    
+    # GET UNDERWATER IRRADIANCE AND PP
+    result <- pp_BIO_v2_c(chlpix = chlpix,
+                          alphaB = alphaB,
+                          PBm = PBm,
+                          Eqdifw = Eqdifw,
+                          Eqdirw = Eqdirw,
+                          zendR = zendR,
+                          zendw = zendw,
+                          asw = asw)
+    
+    return(result$PP)
+    
+}
+
+full_PP_calc_NU <- function(df) {
+    
+    df <- as.numeric(df)
+    latipxl <- df[1]
+    daypxl <- df[2]
+    yearpxl <- df[3]
+    SatPAR <- df[4]
+    chlpix <- df[5]
+    alphaB <- df[6]
+    PBm <- df[7]
+    z_m = df[8]
+    B_0 = df[9]
+    h = df[10]
+    sigma = df[11]
+    
+    # GET SURFACE PAR
+    presolved <- PAR_resolved(latipxl = latipxl,
+                              daypxl = daypxl,
+                              yearpxl = yearpxl,
+                              SatPAR = SatPAR)
+    Eqdifw <- presolved$Eqdifw
+    Eqdirw <- presolved$Eqdirw
+    zendR <- presolved$zendR
+    zendw <- presolved$zendw
+    
+    # GET UNDERWATER IRRADIANCE AND PP
+    result <- pp_BIO_v2_NU_c(chlpix = chlpix,
+                             alphaB = alphaB,
+                             PBm = PBm,
+                             Eqdifw = Eqdifw,
+                             Eqdirw = Eqdirw,
+                             zendR = zendR,
+                             zendw = zendw,
+                             asw = asw,
+                             z_m, B_0, h, sigma)
+    
+    return(result$PP)
+    
+}
+
+
 
 # # test data (get remaining variables from PAR_resolved():
 # chlpix = 8
@@ -208,6 +285,20 @@ pp_BIO_v2_c <- function(chlpix, alphaB, PBm, Eqdifw, Eqdirw, zendR, zendw, asw) 
     
     day_hrs <- which(zendR <= 90)
     
+    
+    
+    
+    
+    # # CONVERT E BACK TO UNITS OF W/M2 TO BE COMPATIBLE WITH ALPHAB AND PMB????
+    # Eqdirw <- microMol_per_m2_per_s_to_watt_per_m2(Eqdirw,lambda)
+    # Eqdifw <- microMol_per_m2_per_s_to_watt_per_m2(Eqdifw,lambda)
+    
+    
+    
+    
+    
+    
+    
     PP <- underwater_irradiance_c(Eqdirw, Eqdifw, chlpix, nstep, lambda, pc1f, pc2f, ratef, fracys, Sy, asw, zendR, zendw, alphaB, PBm, BW, min(day_hrs)-1, max(day_hrs)-1)
     
     # /2 because doing measurements every half metre
@@ -218,7 +309,7 @@ pp_BIO_v2_c <- function(chlpix, alphaB, PBm, Eqdifw, Eqdirw, zendR, zendw, asw) 
 }
 
 
-pp_BIO_v2_NU_c <- function(chlpix, alphaB, PBm, Eqdifw, Eqdirw, zendR, zendw, asw) {
+pp_BIO_v2_NU_c <- function(chlpix, alphaB, PBm, Eqdifw, Eqdirw, zendR, zendw, asw, z_m, B_0, h, sigma) {
     
     dz = 0.5                   # Depth interval between computations (metres)
     Zmin = 0.0                 # Min depth, we have computed the light just under the water, so the next
@@ -231,12 +322,8 @@ pp_BIO_v2_NU_c <- function(chlpix, alphaB, PBm, Eqdifw, Eqdirw, zendR, zendw, as
     
     
     #***********************
-    # fix chl profile
-    if (length(chlpix)==1) {
-        chlpix <- rep(chlpix, nstep)
-    }
-    # # tmax = depth at max chla
-    # chlpix <- shifted_gaussian(tv=depths, B0=B0, beta=0, h=h, sigma=sigma, tmax=tmax)
+    # calculate chl profile
+    chlpix = shifted_gaussian(tv=Z, B0=B_0, h=h, sigma=sigma, tmax=z_m)
     
     
     ###############################
@@ -269,6 +356,15 @@ pp_BIO_v2_NU_c <- function(chlpix, alphaB, PBm, Eqdifw, Eqdirw, zendR, zendw, as
     fracys = 0.35
     
     day_hrs <- which(zendR <= 90)
+    
+    
+    
+    # # CONVERT E BACK TO UNITS OF W/M2 TO BE COMPATIBLE WITH ALPHAB AND PMB????
+    # Eqdirw <- microMol_per_m2_per_s_to_watt_per_m2(Eqdirw,lambda)
+    # Eqdifw <- microMol_per_m2_per_s_to_watt_per_m2(Eqdifw,lambda)
+    
+    
+    
     
     PP <- underwater_irradiance_NU_c(Eqdirw, Eqdifw, chlpix, lambda, pc1f, pc2f, ratef, fracys, Sy, asw, zendR, zendw, alphaB, PBm, BW, min(day_hrs)-1, max(day_hrs)-1)
     
