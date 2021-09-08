@@ -16,6 +16,7 @@ library(fields)
 # PAR, once the visibility is found, we derive E_d(0-,lambda)
 source("R/Gcmod.r")
 source("R/convert_watt_to_quanta.R")
+source("R/convert_quanta_to_watt.R")
 
 # here We download clear sky irradiance, it will be used to
 # derive Ed(lambda,0-) as we sill scale the visibility to match
@@ -85,7 +86,7 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
     latidx = round(latipxl-35)/0.25 # we need to remove 35 deg because the look-up-table starts
     # at 35 deg.
     PARvis = PARday[latidx,daypxl,]
-    pxlvis = approx(PARvis,visibility,xout = SatPAR)$y
+    pxlvis = approx(PARvis, visibility, xout = SatPAR, rule=c(2,2))$y
     
     # si <- surface_irr(zendR, rad, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
     si <- surface_irr_c(zendR, rad, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
@@ -112,8 +113,7 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
     # Eqd = Eqdir + Eqdif
 
     # Now we use Ed and SatPar to scale Edw
-    # Note that extraterrestrial solar irradiance in Gregg and Carder is in w.cm-2.microm and we want
-    # it in mW.m-2.nm, so we *1000 (for W to mW), we /100000 (for cm-2 to m-2) and we /1000 (for microm to nm)
+    # Note that extraterrestrial solar irradiance in Gregg and Carder is in w.cm-2.microm and we want it in mW.m-2.nm-1, so we *1000 (for W to mW), we /100000 (for cm-2 to m-2) and we /1000 (for microm to nm)
     ScalingPARfactor = SatPAR / (sum(Ed)*3600/1000)
     
     # Here we have the underwater light field in Ein.m-2 for a given hour.
