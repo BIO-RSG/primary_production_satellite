@@ -13,35 +13,10 @@ library(rasterVis)
 library(patchwork)
 library(dplyr)
 library(ncdf4)
-```
-
-Collecting maps of input variables and the resulting PP maps using different models, for comparison:  
-
-
-```{r, fig.height=10, fig.width=10}
-xlims <- c(-95,-42)
-ylims <- c(39,82)
-canada <- map_data("world")
-
-# get input and pp for bio_v1_carla
-bio_v1_input <- dplyr::bind_cols(fread("model_comparisons/BIO_v1_Carla/201807_LHTBI.csv"),
-                                 fread("model_comparisons/BIO_v1_Carla/201807_pi-20141113.csv"))
-rast_alphab <- var_to_rast(bio_v1_input %>% dplyr::select(Name,alphaB), ext=c(xlims,ylims))
-rast_pmb <- var_to_rast(bio_v1_input %>% dplyr::select(Name,PmB), ext=c(xlims,ylims))
-rast_chl <- var_to_rast(bio_v1_input %>% dplyr::mutate(chl=log10(chlor_a)) %>% dplyr::select(Name,chl), ext=c(xlims,ylims))
-pp <- dplyr::bind_cols(bio_v1_input %>% dplyr::select(Name),
-                       fread("model_comparisons/BIO_v1_Carla/201807_pp.csv")) %>%
-  dplyr::filter(cppday >= 0)
-rast_pp <- var_to_rast(pp %>% dplyr::select(Name, cppday), ext=c(xlims,ylims))
-
-# get vgpm pp
-rast_vgpm <- raster("model_comparisons/VGPM/vgpm.2018182.hdf")
-extent(rast_vgpm) <- extent(c(xmin=-180,xmax=180,ymin=-90,ymax=90))
-rast_vgpm <- crop(rast_vgpm, extent(c(xlims,ylims)))
-rast_vgpm[rast_vgpm < 0] <- NA
 
 make_map <- function(rast,title,use_lims=TRUE) {
     cm <- colorRampPalette(c("#00007F","blue","#007FFF","cyan","#7FFF7F","yellow","#FF7F00","red","#7F0000"))(100)
+    canada <- map_data("world")
     p <- rasterVis::gplot(rast) +
       geom_tile(aes(fill = value)) +
       geom_map(data = canada, map = canada, aes(x = long, y = lat, group = group, map_id=region), fill = "white", colour = "#7f7f7f", size=0.5) +
@@ -63,21 +38,96 @@ make_map <- function(rast,title,use_lims=TRUE) {
       rmedian <- median(rvals,na.rm=TRUE)
       rsd <- sd(rvals,na.rm=TRUE)
       rlims <- c(max(0,rmedian-3*rsd),rmedian+3*rsd)
-      rast[rast<rlims[1]] <- rlims[1]
-      rast[rast>rlims[2]] <- rlims[2]
       p <- p + scale_fill_gradientn(colours = cm, limits=rlims)
     } else {
       p <- p + scale_fill_gradientn(colours = cm)
     }
-    return(p)
+    return(list(p,cm))
 }
 
-r1 <- make_map(rast_alphab, "alphaB - BIO_v1 (from Carla)",use_lims=FALSE)
-r2 <- make_map(rast_pmb, "PmB - BIO_v1 (from Carla)",use_lims=FALSE)
-r3 <- make_map(rast_chl, "log10(chl) - BIO_v1 (from Carla)",use_lims=FALSE)
-r4 <- make_map(rast_pp, "Daily PP - BIO_v1 (from Carla)")
-r5 <- make_map(rast_vgpm, "Daily PP - VGPM")
+make_map_stack <- function(rast_stack) {
+    cm <- colorRampPalette(c("#00007F","blue","#007FFF","cyan","#7FFF7F","yellow","#FF7F00","red","#7F0000"))(100)
+    canada <- map_data("world")
+    p <- rasterVis::gplot(rast_stack) +
+      geom_tile(aes(fill = value)) +
+      facet_wrap(~ variable, nrow=1) +
+      geom_map(data = canada, map = canada, aes(x = long, y = lat, group = group, map_id=region), fill = "white", colour = "#7f7f7f", size=0.5) +
+      scale_x_continuous(expand=c(0,0), limits=xlims) +
+      scale_y_continuous(expand=c(0,0), limits=ylims) +
+      coord_fixed(1.5) +
+      theme_bw() +
+      theme(axis.title.x=element_blank(),
+            axis.title.y=element_blank(),
+            legend.title=element_blank(),
+            legend.position="bottom",
+            legend.direction="horizontal",
+            legend.text=element_text(angle=45,hjust=1))
+    # if (use_lims) {
+    #   rvals <- values(rast)
+    #   rmedian <- median(rvals,na.rm=TRUE)
+    #   rsd <- sd(rvals,na.rm=TRUE)
+    #   rlims <- c(max(0,rmedian-3*rsd),rmedian+3*rsd)
+    #   p <- p + scale_fill_gradientn(colours = cm, limits=rlims)
+    # } else {
+      p <- p + scale_fill_gradientn(colours = cm)
+    # }
+    return(list(p,cm))
+}
 
-wrap_plots(list(r1,r2,r3,r4,r5),nrow=2,byrow=TRUE)
+```
 
+Collecting maps of input variables and the resulting PP maps using different models, for comparison:  
+
+
+```{r}
+xlims <- c(-95,-42)
+ylims <- c(39,82)
+
+# get input and pp for bio_v1_carla
+bio_v1_input <- dplyr::bind_cols(fread("model_comparisons/BIO_v1_Carla/201807_LHTBI.csv"),
+                                 fread("model_comparisons/BIO_v1_Carla/201807_pi-20141113.csv"))
+rast_alphab <- var_to_rast(bio_v1_input %>% dplyr::select(Name,alphaB), ext=c(xlims,ylims))
+rast_pmb <- var_to_rast(bio_v1_input %>% dplyr::select(Name,PmB), ext=c(xlims,ylims))
+rast_chl <- var_to_rast(bio_v1_input %>% dplyr::mutate(chl=log10(chlor_a)) %>% dplyr::select(Name,chl), ext=c(xlims,ylims))
+pp <- dplyr::bind_cols(bio_v1_input %>% dplyr::select(Name),
+                       fread("model_comparisons/BIO_v1_Carla/201807_pp.csv")) %>%
+  dplyr::filter(cppday >= 0)
+rast_pp <- var_to_rast(pp %>% dplyr::select(Name, cppday), ext=c(xlims,ylims))
+
+# get vgpm pp
+rast_vgpm <- raster("model_comparisons/VGPM/vgpm.2018182.hdf")
+extent(rast_vgpm) <- extent(c(xmin=-180,xmax=180,ymin=-90,ymax=90))
+rast_vgpm <- crop(rast_vgpm, extent(c(xlims,ylims)))
+rast_vgpm[rast_vgpm < 0] <- NA
+
+# get biov2 pp
+load("model_comparisons_biov2_test_uprofile_variablePI.rda")
+finalU=final
+rast_biov2U = var_to_rast(finalU %>% dplyr::select(bin, PP) %>% dplyr::rename(PP_uniformProfile=PP), ext=c(xlims,ylims))
+load("model_comparisons_biov2_test_NUprofile_variablePI.rda")
+finalNU=final
+rast_biov2NU = var_to_rast(finalNU %>% dplyr::select(bin, PP) %>% dplyr::rename(PP_nonuniformProfile=PP), ext=c(xlims,ylims))
+
+```
+
+
+```{r, fig.height=5, fig.width=10}
+r1 <- make_map(rast_alphab, "alphaB - BIO_v1 (from Carla)",use_lims=FALSE)[[1]]
+r2 <- make_map(rast_pmb, "PmB - BIO_v1 (from Carla)",use_lims=FALSE)[[1]]
+r3 <- make_map(rast_chl, "log10(chl) - BIO_v1 (from Carla)",use_lims=FALSE)[[1]]
+# r4 <- make_map(rast_pp, "Daily PP - BIO_v1 (from Carla)")[[1]]
+# r5 <- make_map(rast_vgpm, "Daily PP - VGPM")[[1]]
+wrap_plots(list(r1,r2,r3),nrow=1,byrow=TRUE)
+```
+
+
+```{r, fig.height=5, fig.width=10}
+pp_rasts1 <- stack(rast_pp, resample(rast_vgpm,rast_pp))
+pp_rasts2 <- stack(rast_biov2U, rast_biov2NU)
+names(pp_rasts1) <- c("Daily PP - BIO_v1 (from Carla)","Daily PP - VGPM")
+names(pp_rasts2) <- c("BIOv2_uniformProfile", "BIOv2_nonuniformProfile")
+ms1 <- make_map_stack(pp_rasts1)
+ms2 <- make_map_stack(pp_rasts2)
+ms1[[1]] + scale_fill_gradientn(colors = ms1[[2]], limits=c(0,3000))
+ms2[[1]] + scale_fill_gradientn(colors = ms2[[2]], limits=c(0,200))
 ```
