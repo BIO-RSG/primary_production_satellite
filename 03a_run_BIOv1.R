@@ -268,7 +268,7 @@ for (y in y_list) {
             #                     uniform_profile=uniform_profile,
             #                     bp=bp,
             #                     gauss=gauss)
-            }
+            
 
             # # check if compiling the function makes it faster
             # cmp_dwcpn <- cmpfun(dwcpn)
