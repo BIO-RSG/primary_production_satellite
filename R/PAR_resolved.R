@@ -72,7 +72,7 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
     xhr = 1:23
     datepxl = doyday(yearpxl,daypxl) + hours(xhr)
     julianpxl = JD(doyday(yearpxl,daypxl))
-    datepxl = str_replace(as.character(datepxl),"AST","UTC") # Here I put the date to U
+    tz(datepxl) <- "UTC" # Here using timezone UTC
     
     # Here we convert PAR from Einstein.m-2.d-1 to mW.cm-2.um-1
     # see seawifs tech report vol 22 page 49 
