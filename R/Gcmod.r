@@ -10,10 +10,10 @@ data_atm <- read.table("data/gcirrad.txt",skip=4,header=TRUE)
 # THIS GOES FROM 350-801NM, BUT WE'RE ONLY INTERESTED IN THESE INDICES: 51:351 (400-700nm)
 
 inds <- 51:351
-len_inds <- length(inds)
+# len_inds <- length(inds)
 
 lam <- data_atm[inds,1]
-Fobar <- data_atm[inds,2]*10 #convert W/cm2/um to W/m2/nm
+Fobar <- data_atm[inds,2]
 oza <- data_atm[inds,3]
 ag <- data_atm[inds,4]
 aw <- data_atm[inds,5]
@@ -22,14 +22,14 @@ aw <- data_atm[inds,5]
 #*******************************************************************************
 # Parameters to run atmospheric irradiance model
 
-mxmu=10
-mxphi=24
-mxz=100
-mxwave=90
-mxnsky=10
-mxcomp=10
-mxnzvals=200
-nlt=len_inds#???452
+# mxmu=10
+# mxphi=24
+# mxz=100
+# mxwave=90
+# mxnsky=10
+# mxcomp=10
+# mxnzvals=200
+# nlt=len_inds#???452
 
 #rh = 0.8  # humidity default value
 #am = 1 # aerosol model (1-10), 1 is default value (marine model)
@@ -67,6 +67,7 @@ comp_sco3 <- function(ylat,xlon,jday,ro3) {
 
 #  Correct for Earth-Sun distance
 #  modify date if it is last day of a leap year
+#  equation (12) in Gregg-Carder paper (1990)
 solar_irr <- function(Fobar,jday) {
   if(jday >365) {jday=365.0}
   Fo = Fobar * (1.0+1.67E-2*cos(pi2*(jday-3)/365.0))^2
@@ -192,86 +193,86 @@ navaer <- function(rh,am,wsm,ws,vis) {
 }
 
 
-atmodd <- function(iblw=iblw,rad=rad,lam=lam,theta=theta,oza=oza,
-                   ag=ag,aw=aw,sco3=sco3,p=p,wv=wv,rh=rh,am=am,
-                   wsm=wsm,ws=ws,vis=vis,Fo=Fo) {
-  
-  #  Model for atmospheric transmittance of solar irradiance through
-  #  a maritime atmosphere.  Computes direct and diffuse separately.
-  #  Includes water vapor and oxygen absorption.
-
-  #  Compute atmospheric path lengths (air mass); pressure-corrected
-  cosunz = cos(theta/rad)
-  #  Modified March, 1994 according to Kasten and Young 1989.
-
-  rex = -1.6364
-  rtmp = (96.07995-theta)^rex
-  rm = 1.0/(cosunz+0.50572*rtmp)
-  rmp = p/p0*rm
-  otmp = (cosunz*cosunz+44.0/6370.0)^0.5
-  rmo = (1.0+22.0/6370.0)/otmp
-
-  #  Obtain aerosol parameters; simplified Navy aerosol model
-  res.aer <- navaer(rh,am,wsm,ws,vis)
-  alpha <- res.aer$alpha
-  beta <- res.aer$beta
-  asymp <- res.aer$asymp
-  wa <- res.aer$wa
-
-  eta = -alpha
-  #   Forward scattering probability
-  alg = log(1.0-asymp)
-  afs = alg*(1.459+alg*(.1595+alg*.4129))
-  bfs = alg*(.0783+alg*(-.3824-alg*.5874))
-  Fa = 1.0 - 0.5*exp((afs+bfs*cosunz)*cosunz)
-
-  # Surface reflectance
-  if (iblw == 1) {
-    res.sfc <- sfcrfl(rad,theta,ws)
-    rod <- res.sfc$rod
-    ros <- res.sfc$ros
-  } else {
-    rod = 0.0
-    ros = 0.0
-  }
-
-  # Compute spectral irradiance
-  #   Rayleigh, by Bird's method
-  rlam = lam*1.0E-3
-  tr = 1.0/(115.6406*rlam^4 - 1.335*rlam^2)
-  rtra = exp(-tr*rmp)
-  #    Ozone
-  to = oza*sco3   #optical thickness
-  otra = exp(-to*rmo)   #transmittance
-  #   Aerosols
-  ta = beta*rlam^eta
-  atra = exp(-ta*rm)
-  taa = exp(-(1.0-wa)*ta*rm)
-  tas = exp(-wa*ta*rm)
-  #   Oxygen/gases
-  gtmp = (1.0 + 118.3*ag*rmp)^0.45
-  gtmp2 = -1.41*ag*rmp
-  gtra = exp(gtmp2/gtmp)
-  #   Water Vapor
-  wtmp = (1.0+20.07*aw*wv*rm)^0.45
-  wtmp2 = -0.2385*aw*wv*rm
-  wtra = exp(wtmp2/wtmp)
-
-  #  Direct irradiance
-  Ediraux = Fo*cosunz*rtra*otra*atra*gtra*wtra*(1.0-rod)
-
-  #   Diffuse irradiance
-  dray = Fo*cosunz*gtra*wtra*otra*taa*0.5*(1.0-rtra^.95)
-  daer = Fo*cosunz*gtra*wtra*otra*rtra^1.5*taa*Fa*(1.0-tas)
-
-  #  Total diffuse
-  Edifaux = (dray + daer)*(1.0-ros)
-
-  Edaux = Ediraux + Edifaux
-
-  list(Edir = Ediraux, Edif= Edifaux,Ed = Edaux)
-  
-}
+# atmodd <- function(iblw=iblw,rad=rad,lam=lam,theta=theta,oza=oza,
+#                    ag=ag,aw=aw,sco3=sco3,p=p,wv=wv,rh=rh,am=am,
+#                    wsm=wsm,ws=ws,vis=vis,Fo=Fo) {
+#   
+#   #  Model for atmospheric transmittance of solar irradiance through
+#   #  a maritime atmosphere.  Computes direct and diffuse separately.
+#   #  Includes water vapor and oxygen absorption.
+# 
+#   #  Compute atmospheric path lengths (air mass); pressure-corrected
+#   cosunz = cos(theta/rad)
+#   #  Modified March, 1994 according to Kasten and Young 1989.
+# 
+#   rex = -1.6364
+#   rtmp = (96.07995-theta)^rex
+#   rm = 1.0/(cosunz+0.50572*rtmp)
+#   rmp = p/p0*rm
+#   otmp = (cosunz*cosunz+44.0/6370.0)^0.5
+#   rmo = (1.0+22.0/6370.0)/otmp
+# 
+#   #  Obtain aerosol parameters; simplified Navy aerosol model
+#   res.aer <- navaer(rh,am,wsm,ws,vis)
+#   alpha <- res.aer$alpha
+#   beta <- res.aer$beta
+#   asymp <- res.aer$asymp
+#   wa <- res.aer$wa
+# 
+#   eta = -alpha
+#   #   Forward scattering probability
+#   alg = log(1.0-asymp)
+#   afs = alg*(1.459+alg*(.1595+alg*.4129))
+#   bfs = alg*(.0783+alg*(-.3824-alg*.5874))
+#   Fa = 1.0 - 0.5*exp((afs+bfs*cosunz)*cosunz)
+# 
+#   # Surface reflectance
+#   if (iblw == 1) {
+#     res.sfc <- sfcrfl(rad,theta,ws)
+#     rod <- res.sfc$rod
+#     ros <- res.sfc$ros
+#   } else {
+#     rod = 0.0
+#     ros = 0.0
+#   }
+# 
+#   # Compute spectral irradiance
+#   #   Rayleigh, by Bird's method
+#   rlam = lam*1.0E-3
+#   tr = 1.0/(115.6406*rlam^4 - 1.335*rlam^2)
+#   rtra = exp(-tr*rmp)
+#   #    Ozone
+#   to = oza*sco3   #optical thickness
+#   otra = exp(-to*rmo)   #transmittance
+#   #   Aerosols
+#   ta = beta*rlam^eta
+#   atra = exp(-ta*rm)
+#   taa = exp(-(1.0-wa)*ta*rm)
+#   tas = exp(-wa*ta*rm)
+#   #   Oxygen/gases
+#   gtmp = (1.0 + 118.3*ag*rmp)^0.45
+#   gtmp2 = -1.41*ag*rmp
+#   gtra = exp(gtmp2/gtmp)
+#   #   Water Vapor
+#   wtmp = (1.0+20.07*aw*wv*rm)^0.45
+#   wtmp2 = -0.2385*aw*wv*rm
+#   wtra = exp(wtmp2/wtmp)
+# 
+#   #  Direct irradiance
+#   Ediraux = Fo*cosunz*rtra*otra*atra*gtra*wtra*(1.0-rod)
+# 
+#   #   Diffuse irradiance
+#   dray = Fo*cosunz*gtra*wtra*otra*taa*0.5*(1.0-rtra^.95)
+#   daer = Fo*cosunz*gtra*wtra*otra*rtra^1.5*taa*Fa*(1.0-tas)
+# 
+#   #  Total diffuse
+#   Edifaux = (dray + daer)*(1.0-ros)
+# 
+#   Edaux = Ediraux + Edifaux
+# 
+#   list(Edir = Ediraux, Edif= Edifaux,Ed = Edaux)
+#   
+# }
 
 # rod and ros calculated before calling this version of atmodd
 atmodd_v2 <- function(rod, ros, rad=rad,lam=lam,theta=theta,oza=oza,
@@ -309,7 +310,7 @@ atmodd_v2 <- function(rod, ros, rad=rad,lam=lam,theta=theta,oza=oza,
   
   # Compute spectral irradiance
   #   Rayleigh, by Bird's method
-  rlam = lam*1.0E-3
+  rlam = lam*1.0E-3 # convert nm to um
   tr = 1.0/(115.6406*rlam^4 - 1.335*rlam^2)
   rtra = exp(-tr*rmp)
   #    Ozone
