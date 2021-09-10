@@ -257,6 +257,7 @@ List atmodd_v2_c(double rod, double ros, double rad, NumericVector lam, double t
 }
 
 
+// returns total, direct, and diffuse irradiance in w/cm2/um
 // [[Rcpp::export]]
 List surface_irr_c(NumericVector zendR, double rad, NumericVector lam,
                    NumericVector oza, NumericVector ag, NumericVector aw,
@@ -264,12 +265,11 @@ List surface_irr_c(NumericVector zendR, double rad, NumericVector lam,
                    double wsm, double ws, double pxlvis, NumericVector Fo) {
 
     // Ed(0+,lambda)
-    NumericMatrix Ed(23,301); // total in mW.m-2.nm-1
+    NumericMatrix Ed(23,301);
     
     // Eq(0-)
     NumericMatrix Eqdirw(23,301); // direct
     NumericMatrix Eqdifw(23,301); // diffus
-    // NumericMatrix Eqdw(23,301); // total in Einstein.m-2
     
     List irr_gc;
     List irrm_gc;
