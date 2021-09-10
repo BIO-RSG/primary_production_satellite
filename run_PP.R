@@ -62,10 +62,10 @@ pmb_method <- "predefined"
 
 # Output filename format = [nc_out]_BIO_NWA_[interval]_[date].nc
 # [date] = YYYYMM or YYYYDDD for monthly or 8day respectively.
-nc_out <- "BIO_v1_fortran/alphab-pmb-variable_nonuniform-profile"
+nc_out <- "BIO_v1_fortran/variablePI_NU"
 
 # Do a subsetted region (for testing)
-subset <- TRUE
+subset <- FALSE
 lat_bounds <- c(43,60)
 lon_bounds <- c(-65,-43)
 
@@ -84,10 +84,10 @@ mvec <- as.numeric(sapply(1:46,function(i) format(as.Date((8*0:45)[i],origin=pas
 jvec <- str_pad(((8*0:45)+1),width=3,side="left",pad="0")
 
 # Path of input formatted csv files
-input_path <- paste0("02_PP_input/", interval, "/")
+input_path <- "model_comparisons/BIO_v1_Carla/"#paste0("02_PP_input/", interval, "/")
 
 # Path for output files
-output_path <- paste0("03_PP_output/",interval,"/")
+output_path <- "model_comparisons/BIO_v1_Carla/"#paste0("03_PP_output/",interval,"/")
 
 files <- list.files(input_path, pattern=".csv")
 file_dates <- sapply(1:length(files), function(i) {strsplit(files[i], "_")[[1]][1]})
@@ -126,22 +126,46 @@ for (y in y_list) {
             
             if (length(file)==0) {next}
             
-            vars_to_select <- c("lat", "doy", "year", "par", "chl", "alphab", "pmb")
             
-            # bin, lon, lat, bathy, chl, sst, par, tcc
-            file_main <- file[which(grepl("satdata", file))]
-            input <- fread(paste0(input_path, file_main)) %>% as.data.frame()
             
-            # add alphab and pmb (PI curve parameter) columns to input
-            file_pi <- file[which(grepl("PIparams", file))]
-            input <- bind_cols(input, fread(paste0(input_path, file_pi)) %>% as.data.frame())
             
-            # if non-uniform profile and gaussian curve, add BP parameter columns to input
-            if (!uniform_profile & gauss) {
-                file_bp <- file[which(grepl("BPparams", file))]
-                input <- bind_cols(input, fread(paste0(input_path, file_bp)) %>% as.data.frame())
-                vars_to_select <- c(vars_to_select, "zm", "B0", "h", "sigma")
-            }
+            
+            
+            # temporary reading/formatting for Carla's files
+            input <- bind_cols(fread(paste0(input_path,"201807_LHTBI.csv")),
+                               fread(paste0(input_path,"201807_pi-20141113.csv")),
+                               fread(paste0(input_path,"201807_pp_fs.csv")),
+                               fread(paste0(input_path,"201807_cp-20141117.csv"))) %>%
+                dplyr::select(Name,Longitude,Latitude,height,chlor_a,sst,par,CLD_FR,
+                              alphaB,PmB,zm,B0_sc,h_sc,sigma)
+            colnames(input) <- c("bin", "lon", "lat", "bathy", "chl", "sst", "par",
+                                 "tcc", "alphab", "pmb", "zm", "B0", "h", "sigma")
+            
+            vars_to_select <- c("lat", "doy", "year", "par", "chl",
+                                "alphab", "pmb", "zm", "B0", "h", "sigma")
+            
+            
+            
+            stop()
+            # # variables needed for BIO_v2
+            # vars_to_select <- c("lat", "doy", "year", "par", "chl", "alphab", "pmb")
+            # 
+            # # bin, lon, lat, bathy, chl, sst, par, tcc
+            # file_main <- file[which(grepl("satdata", file))]
+            # input <- fread(paste0(input_path, file_main)) %>% as.data.frame()
+            # 
+            # # add alphab and pmb (PI curve parameter) columns to input
+            # file_pi <- file[which(grepl("PIparams", file))]
+            # input <- bind_cols(input, fread(paste0(input_path, file_pi)) %>% as.data.frame())
+            # 
+            # # if non-uniform profile and gaussian curve, add BP parameter columns to input
+            # if (!uniform_profile & gauss) {
+            #     file_bp <- file[which(grepl("BPparams", file))]
+            #     input <- bind_cols(input, fread(paste0(input_path, file_bp)) %>% as.data.frame())
+            #     vars_to_select <- c(vars_to_select, "zm", "B0", "h", "sigma")
+            # }
+
+            
             
             # subset (better for testing)
             if (subset) {
@@ -149,9 +173,9 @@ for (y in y_list) {
                     dplyr::filter(between(lat, lat_bounds[1], lat_bounds[2]),
                                   between(lon, lon_bounds[1], lon_bounds[2]))
             }
-            
+
             # if you're using one pair of PI parameters for every pixel, set them
-            # all to either the mean value of the region to process, the median value, 
+            # all to either the mean value of the region to process, the median value,
             # or another predefined value (alphab=1 and PmB=1.69)
             if (use_constant_alphab) {
                 if (alphab_method=="median") {
@@ -172,6 +196,21 @@ for (y in y_list) {
                 }
             }
             
+            
+            
+            
+            
+            
+            
+            # Carla's input files have erroneous data marked as -9000,-9001,-9002...
+            row_sub = apply(input[,chl:sigma], 1, function(row) all(row > -100 ))
+            input = input[row_sub,]
+            
+            
+            
+            
+            
+            
             # grab only the columns needed for the BIO model
             input_subset <- input %>%
                 dplyr::mutate(doy=doy, year=y) %>%
@@ -187,35 +226,17 @@ for (y in y_list) {
             #*******************************************************************
             # CALCULATE PP FOR EACH VALID INDEX
             
-            
-            # Carla's input files have erroneous data marked as -9000,-9001,-9002...
-            input[input < -100] <- NA
-            input_subset[input_subset < -100] <- NA
-            bad_data <- sapply(1:nrow(input),function(ibad) anyNA(input[ibad,]))
-            input <- input[!bad_data,]
-            input_subset <- input_subset[!bad_data,]
-            
-            
             if (uniform_profile) {
-                result <- pbapply(input_subset[1:1e2,],
+                result <- pbapply(input_subset,
                                   MARGIN=1,
                                   FUN=full_PP_calc)
             } else {
-                result <- pbapply(input_subset[1:1e2,],
+                result <- pbapply(input_subset[1:1e4,],
                                   MARGIN=1,
                                   FUN=full_PP_calc_NU)
             }
             
             result <- as.numeric(result)
-            
-            
-            
-            # final <- dplyr::bind_cols(input, result) %>% dplyr::filter(between(result,0,1e4))
-            # colnames(final)[17] <- "PP"
-            # rast = var_to_rast(final %>% dplyr::select(bin, PP), ext=c(lon_bounds,lat_bounds))
-            # 
-            # library(raster)
-            # spplot(rast)
             
             
             #*******************************************************************
