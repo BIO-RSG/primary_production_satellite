@@ -73,8 +73,7 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
     xhr = 1:23
     datepxl = doyday(yearpxl,daypxl) + hours(xhr)
     julianpxl = JD(doyday(yearpxl,daypxl))
-    # datepxl = str_replace(as.character(datepxl),"AST","UTC") # Here I put the date to U
-    tz(datepxl) <- "UTC"
+    tz(datepxl) <- "UTC" # Here using timezone UTC
     
     # Here we convert PAR from Einstein.m-2.d-1 to mW.cm-2.um-1
     # see seawifs tech report vol 22 page 49 
@@ -90,13 +89,16 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
     Fo = solar_irr_c(Fobar, daypxl) # Extraterrestrial irradiance in W/m2/nm
     
     # Find the visibility *pixvil that corresponds to  SatPAR for latitude and day of year:
-    latidx = round(latipxl-35)/0.25 # remove 35 deg because the look-up-table starts at 35 deg
-    
-    # ERROR CHECK - LUT ONLY GOES TO 80 DEG LATITUDE
-    if (latidx > 181) {
+    latidx_match = seq(35.0, 80.0, 0.25) # lats of the PARday file, from 35 to 80 in 0.25 degree increments
+    if (length(latidx_match) != nrow(PARday)) {
+        print("Error with PARday file and line 92")
+        break
+    } else if (latipxl > 80 | latipxl < 35) {
         return(list(Eqdifw=rep(NA,length(lam)), Eqdirw=rep(NA,length(lam)),
                     zendR=zendR, zendw=zendw))
     }
+    latidx = which.min(abs(latidx_match - latipxl))
+    # BEFORE: latidx = round((latipxl-35)/0.25) # remove 35 deg because the look-up-table starts at 35 degs
     
     PARvis = PARday[latidx,daypxl,]
     pxlvis = approx(PARvis, visibility, xout = SatPAR, rule=c(2,2))$y
