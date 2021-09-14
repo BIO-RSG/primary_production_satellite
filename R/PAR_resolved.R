@@ -22,7 +22,10 @@ source("R/convert_units.R")
 data_atm <- read.table("data/gcirrad.txt",skip=4,header=TRUE)
 inds <- 51:351 # table goes from 350-801nm, but we only want 400-700nm (indices 51-351)
 lam <- data_atm[inds,1]
-Fobar <- data_atm[inds,2]
+# convert from W/cm2/um to W/m2/nm
+# Note: do NOT convert the units of the other input here (this is how the input
+# should be used according to the Gregg-Carder 1990 paper)
+Fobar <- data_atm[inds,2] * 10
 oza <- data_atm[inds,3]
 ag <- data_atm[inds,4]
 aw <- data_atm[inds,5]
@@ -42,17 +45,12 @@ am = 1 # aerosol model (1-10), 1 is default value (marine model)
 wv = 1.5 # precipitable water
 wsm = 0.0 # Average wind speed over 24 hours, default value (m/s)
 ws = 0.0 # instant wind speed (m/s)
-vis = 40  # visibility in km; enter 15 for default
+# vis = 40  # visibility in km; enter 15 for default - this is calculated instead using PARday to get pxlvis in PAR_resolved()
 ro3 = 100 # ozone in Dobson Units, or enter -99 for climatological ozone
 # values (computed from the day and Earth position)
-iblw = 1 # = 0 to compute above-surface values
-# = 1 to compute below-surface values
+iblw = 1 # = 0 to compute above-surface values, or 1 to compute below-surface values
 p0 = 29.92 # reference atmospheric pressure at sea level
 pres = 29.9 # Real time atmospheric pressure
-
-rad = 180/pi
-pi2 <- 2*pi
-
 nw = 1.34 # refractive index of seawater
 
 
@@ -65,6 +63,9 @@ nw = 1.34 # refractive index of seawater
 # daypxl = 173
 # yearpxl = 2018
 # SatPAR = 24
+# Rcpp::sourceCpp("surface_irradiance.cpp")
+# source("R/Gcmod.r")
+
 
 PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
     
@@ -72,7 +73,8 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
     xhr = 1:23
     datepxl = doyday(yearpxl,daypxl) + hours(xhr)
     julianpxl = JD(doyday(yearpxl,daypxl))
-    datepxl = str_replace(as.character(datepxl),"AST","UTC") # Here I put the date to U
+    # datepxl = str_replace(as.character(datepxl),"AST","UTC") # Here I put the date to U
+    tz(datepxl) <- "UTC"
     
     # Here we convert PAR from Einstein.m-2.d-1 to mW.cm-2.um-1
     # see seawifs tech report vol 22 page 49 
@@ -81,13 +83,13 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
     
     # Here we compute the sun zenith angle in degree, which is 90 - elevation
     zendR = 90 - oce::sunAngle(datepxl,longitude = 0, latitude = latipxl)$altitude
-    zendw = asin( 1/nw * sin(zendR / rad))
+    zendw = asin( 1/nw * sin(zendR * pi/180))
     
     # We compute the ozone content, it can be derived from climatology or use a real time value
-    sco3 = comp_sco3_c(latipxl, 0, daypxl, ro3, rad)
-    Fo = solar_irr_c(Fobar, daypxl, pi2) # Extraterrestiral irradiance in W.cm-2.um-1
+    sco3 = comp_sco3_c(latipxl, 0, daypxl, ro3) # Hoz in Gregg-Carder 1990 (ozone scale height)
+    Fo = solar_irr_c(Fobar, daypxl) # Extraterrestrial irradiance in W/m2/nm
     
-    # Find the visibility *pixvil) that corresponds to  SatPAR for latitude and day of year:
+    # Find the visibility *pixvil that corresponds to  SatPAR for latitude and day of year:
     latidx = round(latipxl-35)/0.25 # remove 35 deg because the look-up-table starts at 35 deg
     
     # ERROR CHECK - LUT ONLY GOES TO 80 DEG LATITUDE
@@ -100,8 +102,8 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
     pxlvis = approx(PARvis, visibility, xout = SatPAR, rule=c(2,2))$y
     
     # get total, direct, and diffuse irradiance in w/cm2/um
-    # si <- surface_irr(zendR, rad, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
-    si <- surface_irr_c(zendR, rad, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
+    # si <- surface_irr(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
+    si <- surface_irr_c(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
     Ed <- si$Ed
     Eqdirw <- si$Eqdirw
     Eqdifw <- si$Eqdifw
@@ -113,22 +115,16 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
     Eqdifw = Eqdifw/0.83
     
     # UNIT CONVERSION NOTES:
-    #   Gregg-Carder units: watt/cm2/um (in some texts the units are watt/m^2/nm,
-    #                       but it's different here because the gcirrad.txt input
-    #                       is in different units)
+    #   Gregg-Carder units: watt/m2/nm
     #   SatPAR units: started as Einstein.m-2.d-1, converted above to mW.cm-2.microm-1
     
-    # first convert GC units for direct and diffuse irradiance from w/cm2/um --> w/m2/nm
-    # for compatibility with alphaB and PmB later:
-    # *10000 /1000 = *10
-    Eqdirw = Eqdirw * 10
-    Eqdifw = Eqdifw * 10
-    
-    # Now we use Ed and SatPar to scale the irradiance
+    # Use Ed and SatPar to scale the irradiance
     # Temporarily convert Ed (total irrad from GC) to same units as SatPAR, i.e.:
-    # w/cm2/um --> mW/cm2/um
-    # *1000
-    ScalingPARfactor = SatPAR / (sum(Ed)*1000)
+    # w/m2/nm --> mW/cm2/um
+    # *1000 /10000 *1000 = *100
+    # ScalingPARfactor = SatPAR/(sum(Ed)*100)
+    # ScalingPARfactor = SatPAR * 1.193 / (sum(Watt_perm_2_to_microMol_per_m2_per_s(Ed,lambda))*1e-6*24*3600)
+    ScalingPARfactor = SatPAR * 1.193 / (sum(Watt_per_m2_to_Mol_per_m2_perhour(Ed,lambda))*24)
     
     Eqdirw = Eqdirw * ScalingPARfactor
     Eqdifw = Eqdifw * ScalingPARfactor
@@ -138,39 +134,41 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
 }
 
 
-# # returns total, direct, and diffuse irradiance in w/cm2/um
-# surface_irr <- function(zendR, rad, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo) {
-#     
-#     # Ed(0+,lambda)
-#     Ed = matrix(0,23,301)
-#     
-#     # Eq(0-)
-#     Eqdirw = matrix(0,23,301) # direct
-#     Eqdifw = matrix(0,23,301) # diffus
-#     
-#     for (i in 1:23)
-#     {
-#         
-#         if (zendR[i] < 90.)
-#         {
-#             
-#             # above water spectral irradiance
-#             irr.gc = atmodd_v2(rod=0.0, ros=0.0, rad = rad, lam = lam, theta = zendR[i], oza = oza, ag = ag, 
-#                                aw = aw, sco3 = sco3, p=p0, wv = wv, rh = rh, am = am, wsm = wsm,
-#                                ws = ws, vis = pxlvis, Fo = Fo)
-#             Ed[i,] = irr.gc$Ed
-#             
-#             # Under water spectral irradiance
-#             res.sfc <- sfcrfl(rad,zendR[i],ws)
-#             irrm.gc = atmodd_v2(rod=res.sfc$rod, ros=res.sfc$ros, rad = rad, lam = lam, theta = zendR[i], oza = oza, ag = ag, 
-#                                 aw = aw, sco3 = sco3, p=p0, wv = wv, rh = rh, am = am, wsm = wsm,
-#                                 ws = ws, vis = pxlvis, Fo = Fo)
-#             Eqdirw[i,] = irrm.gc$Edir
-#             Eqdifw[i,] = irrm.gc$Edif
-#             
-#         }
-#     }
-#     
-#     return(list(Ed=Ed, Eqdirw=Eqdirw, Eqdifw=Eqdifw))
-#     
-# }
+# returns total, direct, and diffuse irradiance in w/cm2/um
+surface_irr <- function(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo) {
+
+    rad = 180/pi
+
+    # Ed(0+,lambda)
+    Ed = matrix(0,23,301)
+
+    # Eq(0-)
+    Eqdirw = matrix(0,23,301) # direct
+    Eqdifw = matrix(0,23,301) # diffus
+
+    for (i in 1:23)
+    {
+
+        if (zendR[i] < 90.)
+        {
+
+            # above water spectral irradiance
+            irr.gc = atmodd_v2(rod=0.0, ros=0.0, rad = rad, lam = lam, theta = zendR[i], oza = oza, ag = ag,
+                               aw = aw, sco3 = sco3, p=p0, wv = wv, rh = rh, am = am, wsm = wsm,
+                               ws = ws, vis = pxlvis, Fo = Fo)
+            Ed[i,] = irr.gc$Ed
+
+            # Under water spectral irradiance
+            res.sfc <- sfcrfl(rad,zendR[i],ws)
+            irrm.gc = atmodd_v2(rod=res.sfc$rod, ros=res.sfc$ros, rad = rad, lam = lam, theta = zendR[i], oza = oza, ag = ag,
+                                aw = aw, sco3 = sco3, p=p0, wv = wv, rh = rh, am = am, wsm = wsm,
+                                ws = ws, vis = pxlvis, Fo = Fo)
+            Eqdirw[i,] = irrm.gc$Edir
+            Eqdifw[i,] = irrm.gc$Edif
+
+        }
+    }
+
+    return(list(Ed=Ed, Eqdirw=Eqdirw, Eqdifw=Eqdifw))
+
+}
