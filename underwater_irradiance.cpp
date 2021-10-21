@@ -10,7 +10,7 @@ NumericMatrix underwater_irradiance_c(NumericMatrix Eqdirw, NumericMatrix Eqdifw
                                       NumericVector lambda, NumericVector pc1f, NumericVector pc2f,
                                       NumericVector ratef, double fracys, double Sy, NumericVector asw,
                                       NumericVector zendR, NumericVector zendw, double alphaB, double PBm,
-                                      NumericVector BW, int hr1, int hr2) {
+                                      NumericVector BW, int hr1, int hr2, double dz) {
     
     double Rsize = lambda.size();
     NumericMatrix PP(23, nstep);
@@ -59,19 +59,21 @@ NumericMatrix underwater_irradiance_c(NumericMatrix Eqdirw, NumericMatrix Eqdifw
         tmp_Eqdifw = Eqdifw(it, _);
         
         // calculate PP for the first layer
-        PIz = 1/cos(zendw[it]) * sum(alphaBc * tmp_Eqdirw) + 1.20 * sum(alphaBc * tmp_Eqdifw);
+        // PIz = 1/cos(zendw[it]) * sum(alphaBc * tmp_Eqdirw) + 1.20 * sum(alphaBc * tmp_Eqdifw);
+        PIz = sum(alphaBc * (tmp_Eqdirw + tmp_Eqdifw));
         PP(it, 0) = chlz * PIz/sqrt(1 + pow((PIz/PBm),2));
         
         // calculate attenuation coefficient for each wavelength (for uniform profile, it's the same at every depth)
-        Kddir = exp(-0.5 * (at + bbt) / cos(zendw[it]));
-        Kddif = exp(-0.5 * (at + bbt) / 0.83);
+        Kddir = exp(-dz * (at + bbt) / cos(zendw[it]));
+        Kddif = exp(-dz * (at + bbt) / 0.83);
         
         for (int iz=1; iz < nstep; iz++) { // loop on depth, we start at the second step as the first one is Eqdw (note: C++ uses zero-indexing)
             
             tmp_Eqdirw = tmp_Eqdirw * Kddir;
             tmp_Eqdifw = tmp_Eqdifw * Kddif;
 
-            PIz = 1/cos(zendw[it]) * sum(alphaBc * tmp_Eqdirw) + 1.20 * sum(alphaBc * tmp_Eqdifw);
+            // PIz = 1/cos(zendw[it]) * sum(alphaBc * tmp_Eqdirw) + 1.20 * sum(alphaBc * tmp_Eqdifw);
+            PIz = sum(alphaBc * (tmp_Eqdirw + tmp_Eqdifw));
             PP(it, iz) = chlz * PIz/sqrt(1 + pow((PIz/PBm),2));
             
         } // end loop on depth
@@ -87,7 +89,7 @@ NumericMatrix underwater_irradiance_NU_c(NumericMatrix E0dir, NumericMatrix E0di
                                          NumericVector lambda, NumericVector pc1f, NumericVector pc2f,
                                          NumericVector ratef, double fracys, double Sy, NumericVector asw,
                                          NumericVector zendR, NumericVector zendw, double alphaB, double PBm,
-                                         NumericVector BW, int hr1, int hr2) {
+                                         NumericVector BW, int hr1, int hr2, double dz) {
     
     double nstep = chlpix.size();
     double Rsize = lambda.size();
@@ -142,23 +144,26 @@ NumericMatrix underwater_irradiance_NU_c(NumericMatrix E0dir, NumericMatrix E0di
         apbar = mean(aphy);
         alphaBc = alphaB * aphy / apbar;
         
-        Kddif = exp(-0.5 * (at + bbt) / 0.83);
-        E0dir_num = -0.5 * (at + bbt);
+        Kddif = exp(-dz * (at + bbt) / 0.83);
+        E0dir_num = -dz * (at + bbt);
 
         if (iz==1) {
             for (int it=hr1; it <= hr2; it++) {
-                PIz = 1/cos(zendw[it]) * sum(alphaBc * E0dir(it, _)) + 1.20 * sum(alphaBc * E0dif(it, _));
+                // PIz = 1/cos(zendw[it]) * sum(alphaBc * E0dir(it, _)) + 1.20 * sum(alphaBc * E0dif(it, _));
+                PIz = sum(alphaBc * (E0dir(it, _) + E0dif(it, _)));
                 PP(it, 0) = chlz * PIz/sqrt(1 + pow((PIz/PBm),2));
                 tmp_E0dir(it, _) = E0dir(it, _) * exp(E0dir_num / cos(zendw[it]));
                 tmp_E0dif(it, _) = E0dif(it, _) * Kddif;
-                PIz = 1/cos(zendw[it]) * sum(alphaBc * tmp_E0dir(it, _)) + 1.20 * sum(alphaBc * tmp_E0dif(it, _));
+                // PIz = 1/cos(zendw[it]) * sum(alphaBc * tmp_E0dir(it, _)) + 1.20 * sum(alphaBc * tmp_E0dif(it, _));
+                PIz = sum(alphaBc * (tmp_E0dir(it, _) + tmp_E0dif(it, _)));
                 PP(it, 1) = chlz * PIz/sqrt(1 + pow((PIz/PBm),2));
             }
         } else {
             for (int it=hr1; it <= hr2; it++) {
                 tmp_E0dir(it, _) = tmp_E0dir(it, _) * exp(E0dir_num / cos(zendw[it]));
                 tmp_E0dif(it, _) = tmp_E0dif(it, _) * Kddif;
-                PIz = 1/cos(zendw[it]) * sum(alphaBc * tmp_E0dir(it, _)) + 1.20 * sum(alphaBc * tmp_E0dif(it, _));
+                // PIz = 1/cos(zendw[it]) * sum(alphaBc * tmp_E0dir(it, _)) + 1.20 * sum(alphaBc * tmp_E0dif(it, _));
+                PIz = sum(alphaBc * (tmp_E0dir(it, _) + tmp_E0dif(it, _)));
                 PP(it, iz) = chlz * PIz/sqrt(1 + pow((PIz/PBm),2));
             }
         }

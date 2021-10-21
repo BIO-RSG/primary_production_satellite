@@ -22,7 +22,7 @@ source("R/convert_units.R")
 data_atm <- read.table("data/gcirrad.txt",skip=4,header=TRUE)
 inds <- 51:351 # table goes from 350-801nm, but we only want 400-700nm (indices 51-351)
 lam <- data_atm[inds,1]
-# convert from W/cm2/um to W/m2/nm
+# convert from W/cm2/um to W/m2/nm (*10000 for cm2-->m2, /1000 for um-->nm, *10000/1000 = *10)
 # Note: do NOT convert the units of the other input here (this is how the input
 # should be used according to the Gregg-Carder 1990 paper)
 Fobar <- data_atm[inds,2] * 10
@@ -67,7 +67,7 @@ nw = 1.34 # refractive index of seawater
 # source("R/Gcmod.r")
 
 
-PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
+PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR, Cloud) {
     
     # computer sun angle for day
     xhr = 1:23
@@ -103,74 +103,78 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {
     PARvis = PARday[latidx,daypxl,]
     pxlvis = approx(PARvis, visibility, xout = SatPAR, rule=c(2,2))$y
     
-    # get total, direct, and diffuse irradiance in w/cm2/um
+    # get planar total, direct, and diffuse irradiance in w/m2/nm, using gregg-carder
     # si <- surface_irr(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
     si <- surface_irr_c(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
-    Ed <- si$Ed
+    # above surface
+    Eddir <- si$Eddir
+    Eddif <- si$Eddif
+    # below surface
     Eqdirw <- si$Eqdirw
     Eqdifw <- si$Eqdifw
     
-    # PLANAR TO SCALAR CONVERSIONS
+    # # THIS IS THE EXACT PROCESS USED IN BIOV1 for the same thing
+    # Ed <- Watt_per_m2_to_Mol_per_m2_perhour(Ed, lambda) # change units to mol per m^2 per hour
+    # Ed <- rowSums(Ed, na.rm=TRUE) # for each hour, integrate across wavebands
+    # Ed <- sum(Ed, na.rm=TRUE) # integrate over the day to get to einsteins/m2/day
+    # ScalingPARfactor = SatPAR * 1.193 / Ed # create scaling factor
+    Ed <- (Eddir + Eddif)/cos(zendR*pi/180) # scalar direct and diffuse, above water surface
+    ScalingPARfactor = SatPAR * 1.193 / sum(Watt_per_m2_to_Mol_per_m2_perhour(Ed, lambda), na.rm=TRUE)
+    
+    # UNDERWATER DIRECT AND DIFFUSE --- SCALE BY SATELLITE PAR
+    Eqdirw = Eqdirw * ScalingPARfactor
+    Eqdifw = Eqdifw * ScalingPARfactor
+    
+    # UNDERWATER DIRECT AND DIFFUSE --- PLANAR TO SCALAR
     # We divide the direct irradiance by the in-water sun zenith angle to convert from planar to scalar
     Eqdirw = Eqdirw/cos(zendw)
     # We divide the diffuse irradiance by 0.833 to convert from planar to scalar, as in Platt and Sathyendranath 1997, page 2624 last paragraph
     Eqdifw = Eqdifw/0.83
-    
-    # UNIT CONVERSION NOTES:
-    #   Gregg-Carder units: watt/m2/nm
-    #   SatPAR units: started as Einstein.m-2.d-1, converted above to mW.cm-2.microm-1
-    
-    # Use Ed and SatPar to scale the irradiance
-    # Temporarily convert Ed (total irrad from GC) to same units as SatPAR, i.e.:
-    # w/m2/nm --> mW/cm2/um
-    # *1000 /10000 *1000 = *100
-    # ScalingPARfactor = SatPAR/(sum(Ed)*100)
-    # ScalingPARfactor = SatPAR * 1.193 / (sum(Watt_perm_2_to_microMol_per_m2_per_s(Ed,lambda))*1e-6*24*3600)
-    ScalingPARfactor = SatPAR * 1.193 / (sum(Watt_per_m2_to_Mol_per_m2_perhour(Ed,lambda))*24)
-    
-    Eqdirw = Eqdirw * ScalingPARfactor
-    Eqdifw = Eqdifw * ScalingPARfactor
     
     return(list(Eqdifw=Eqdifw, Eqdirw=Eqdirw, zendR=zendR, zendw=zendw))
     
 }
 
 
-# returns total, direct, and diffuse irradiance in w/cm2/um
-surface_irr <- function(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo) {
-
-    rad = 180/pi
-
-    # Ed(0+,lambda)
-    Ed = matrix(0,23,301)
-
-    # Eq(0-)
-    Eqdirw = matrix(0,23,301) # direct
-    Eqdifw = matrix(0,23,301) # diffus
-
-    for (i in 1:23)
-    {
-
-        if (zendR[i] < 90.)
-        {
-
-            # above water spectral irradiance
-            irr.gc = atmodd_v2(rod=0.0, ros=0.0, rad = rad, lam = lam, theta = zendR[i], oza = oza, ag = ag,
-                               aw = aw, sco3 = sco3, p=p0, wv = wv, rh = rh, am = am, wsm = wsm,
-                               ws = ws, vis = pxlvis, Fo = Fo)
-            Ed[i,] = irr.gc$Ed
-
-            # Under water spectral irradiance
-            res.sfc <- sfcrfl(rad,zendR[i],ws)
-            irrm.gc = atmodd_v2(rod=res.sfc$rod, ros=res.sfc$ros, rad = rad, lam = lam, theta = zendR[i], oza = oza, ag = ag,
-                                aw = aw, sco3 = sco3, p=p0, wv = wv, rh = rh, am = am, wsm = wsm,
-                                ws = ws, vis = pxlvis, Fo = Fo)
-            Eqdirw[i,] = irrm.gc$Edir
-            Eqdifw[i,] = irrm.gc$Edif
-
-        }
-    }
-
-    return(list(Ed=Ed, Eqdirw=Eqdirw, Eqdifw=Eqdifw))
-
-}
+# # returns total, direct, and diffuse irradiance in w/m2/nm
+# surface_irr <- function(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo) {
+# 
+#     rad = 180/pi
+# 
+#     # Ed(0+,lambda)
+#     Ed = matrix(0,23,301)
+#     Eddir = matrix(0,23,301)
+#     Eddif = matrix(0,23,301)
+#
+#     # Eq(0-)
+#     Eqdirw = matrix(0,23,301) # direct
+#     Eqdifw = matrix(0,23,301) # diffus
+# 
+#     for (i in 1:23)
+#     {
+# 
+#         if (zendR[i] < 90.)
+#         {
+# 
+#             # above water spectral irradiance
+#             irr.gc = atmodd_v2(rod=0.0, ros=0.0, rad = rad, lam = lam, theta = zendR[i], oza = oza, ag = ag,
+#                                aw = aw, sco3 = sco3, p=p0, wv = wv, rh = rh, am = am, wsm = wsm,
+#                                ws = ws, vis = pxlvis, Fo = Fo)
+#             Ed[i,] = irr.gc$Ed
+#             Eddir[i,] = irr.gc$Edir
+#             Eddif[i,] = irr.gc$Eddif
+# 
+#             # Under water spectral irradiance
+#             res.sfc <- sfcrfl(rad,zendR[i],ws)
+#             irrm.gc = atmodd_v2(rod=res.sfc$rod, ros=res.sfc$ros, rad = rad, lam = lam, theta = zendR[i], oza = oza, ag = ag,
+#                                 aw = aw, sco3 = sco3, p=p0, wv = wv, rh = rh, am = am, wsm = wsm,
+#                                 ws = ws, vis = pxlvis, Fo = Fo)
+#             Eqdirw[i,] = irrm.gc$Edir
+#             Eqdifw[i,] = irrm.gc$Edif
+# 
+#         }
+#     }
+# 
+#     return(list(Ed=Ed, Eddir=Eddir, Eddif=Eddif, Eqdirw=Eqdirw, Eqdifw=Eqdifw))
+# 
+# }
