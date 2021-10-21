@@ -10,10 +10,8 @@ lambda = 400:700
 awp <- read.table("data/pope97.dat",skip=6) # absorption of pure sea water according to Pope and Fry (1997)
 asw <- approx(awp[,1],awp[,2],lambda)$y # asw is absorption by pure seawater at wavelengths of interest
 
-# # test data (get remaining variables from PAR_resolved():
-# chlpix = 8
-# alphaB = 0.033 * 1000 # those have to be defined before in mg C (mg chl m-3)-1 s-1
-# PBm = 2.5 # Those have to be defined before
+# EXAMPLE AT END OF SCRIPT
+
 
 
 #*******************************************************************************
@@ -130,15 +128,15 @@ full_PP_calc_NU <- function(df, lambda=400:700 ,dz=0.5, Zmin=0, Zmax=120, Z=seq(
     B_0 = df[9]
     h = df[10]
     sigma = df[11]
-    Cloud = df[12]
+    # Cloud = df[12]
     
     #*********************************
     # GET SURFACE PAR
     presolved <- PAR_resolved(latipxl = latipxl,
                               daypxl = daypxl,
                               yearpxl = yearpxl,
-                              SatPAR = SatPAR,
-                              Cloud = Cloud)
+                              SatPAR = SatPAR)#,
+                              #Cloud = Cloud)
     Eqdifw <- presolved$Eqdifw
     if (all(is.na(Eqdifw))) {return(NA)}
     Eqdirw <- presolved$Eqdirw
@@ -257,3 +255,32 @@ full_PP_calc_NU <- function(df, lambda=400:700 ,dz=0.5, Zmin=0, Zmax=120, Z=seq(
 #     
 # }
 
+
+
+# #*******************************************************************************
+# # EXAMPLE ####
+# 
+# # units:
+# #       lat = decimal degrees
+# #       par = einsteins/m^2/day
+# #       chl = mg/m^3
+# #       alphab = C/chl/hr/watt/m^2
+# #       pmb = mgC/mg chl/hr
+# #       zm = meters
+# #       B0 = mg/m^3
+# df <- data.frame(matrix(c(39.02083,91,2017,38.13178,5.12604,0.122075,2.12867,
+#                           6.00070,0.295,243.056,19.1074),
+#                         nrow=1))
+# colnames(df) <- c("lat","doy","year","par","chl","alphab","pmb","zm","B0","h","sigma")
+# # load custom functions and necessary libraries
+# library(oceancolouR)    # for various custom functions
+# library(Rcpp)
+# library(RcppArmadillo)
+# library(lubridate)
+# source("R/PAR_resolved.R")
+# sourceCpp("underwater_irradiance.cpp")
+# sourceCpp("surface_irradiance.cpp")
+# # try with uniform profile
+# full_PP_calc(df)
+# # try with nonuniform profile
+# full_PP_calc_NU(df)

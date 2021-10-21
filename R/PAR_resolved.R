@@ -54,20 +54,14 @@ pres = 29.9 # Real time atmospheric pressure
 nw = 1.34 # refractive index of seawater
 
 
+# EXAMPLE AT END OF SCRIPT
+
+
 
 #*******************************************************************************
 # FUNCTION
 
-# # test data:
-# latipxl = 50.
-# daypxl = 173
-# yearpxl = 2018
-# SatPAR = 24
-# Rcpp::sourceCpp("surface_irradiance.cpp")
-# source("R/Gcmod.r")
-
-
-PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR, Cloud) {
+PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
     
     # computer sun angle for day
     xhr = 1:23
@@ -178,3 +172,31 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR, Cloud) {
 #     return(list(Ed=Ed, Eddir=Eddir, Eddif=Eddif, Eqdirw=Eqdirw, Eqdifw=Eqdifw))
 # 
 # }
+
+
+
+
+
+# #*******************************************************************************
+# # EXAMPLE ####
+# 
+# latipxl = 50 # decimal degrees
+# daypxl = 173
+# yearpxl = 2018
+# SatPAR = 24 # einsteins/m^2/day
+# 
+# # load custom functions and necessary libraries
+# library(oceancolouR)    # for various custom functions
+# library(Rcpp)
+# library(RcppArmadillo)
+# library(lubridate)
+# sourceCpp("surface_irradiance.cpp")
+# # get surface irradiance and solar zenith angles
+# result <- PAR_resolved(latipxl, daypxl, yearpxl, SatPAR)
+# # plot of total planar irradiance just below the surface
+# xhr = 1:23
+# Z = seq(0,120,by=0.5)
+# image.plot(xhr, lambda, result$Eqdirw + result$Eqdifw, xlab = "Time (h)", ylab = "wavelength (nm)",axes = F)
+# axis(1)
+# axis(2,at = seq(400,700,100),labels = seq(400,700,100))
+# box()
