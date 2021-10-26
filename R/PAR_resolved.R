@@ -35,7 +35,7 @@ aw <- data_atm[inds,5]
 load("data/LUT_PAR_lati_day_vis.Rdata")
 # latibin = seq(35,80,0.25) # x axis for PARday 
 # daybin = 1:365 # y axis for PARday 
-visibility = 10^seq(-1.6,1.8,,30) # z axis for PARday 
+visibility = 10^seq(-1.6,1.8,30) # z axis for PARday 
 
 # We define lambda for the visible spectrum (i.e. PAR)
 lambda = 400:700
