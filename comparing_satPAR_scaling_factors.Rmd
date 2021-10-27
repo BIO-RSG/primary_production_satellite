@@ -13,11 +13,9 @@ library(patchwork)
 library(oceancolouR)
 
 filename <- "201807_satPAR_scaling_test.rda"
-# filename <- "201807_satPAR_scaling_test_planarDiffuse.rda"
 
 xlims <- c(-95,-42)
 ylims <- c(39,82)
-
 
 # To get the PAR results for an image:
 #
@@ -57,18 +55,38 @@ ylims <- c(39,82)
 
 ```
 
+*BIOv1 = BIO primary production model, version 1*  
+*BIOv2 = BIO primary production model, version 2*  
 
-This is a comparison of methods used to scale modelled PAR to satellite PAR. The scaling factor will differ slightly depending on the units and geometry you use for the modelled and satellite PAR, which can have a noticeable impact on primary production.  
+**Investigating differences in light levels of the PAR modelled in BIOv1 vs BIOv2**  
 
-*The comparison is done using data from July 2018*  
+In the primary production model, spectral direct and diffuse components of planar surface irradiance at hourly intervals are modelled using Bird or Gregg-Carder, and then must be scaled to the actual PAR value read by the satellite. First, the units and geometry must be converted to be the same as the satellite PAR value:  
 
-BIOv1 uses the Bird model for light, and scales to satellite PAR (units = Einsteins/m<sup>2</sup>/day) in its scalar form.  
 
-BIOv2 uses the Gregg-Carder model for light, and scales to satellite PAR (units = mW/cm<sup>2</sup>/um) in its planar form.  
+<div class = "row">
+<div class = "col-md-6">
 
-<br>
+1. Satellite PAR is modelled first as planar irradiance in units of mW/cm<sup>2</sup>/um, then converted to scalar irradiance in units of Einsteins/m<sup>2</sup>/day simply by multiplying by a factor of **1.193**.  
+2. BIOv1 PAR is modelled first as planar irradiance using Bird in units of Watts/m<sup>2</sup>/um, then converted to scalar irradiance in units of Einsteins/m<sup>2</sup>/day by using the cosine of the solar zenith angle and unit conversions and integration.  
+3. BIOv2 PAR is modelled first as planar irradiance using Gregg-Carder in units of Watts/m<sup>2</sup>/nm, and converted to units of mW/cm<sup>2</sup>/um so it can be scaled to the satellite PAR planar irradiance.  
 
-Here we'll use GC-modelled light and satellite PAR to create scaling factors using either the scalar geometry of the light, or the planar geometry of the light. First, the R code used to create the scaling factor after calculating GC light, starting with SatPAR and GC_Ed definitions:  
+Figure 1 shows the scalar and planar components of light.  
+
+Since BIOv1 uses a different method than satellite PAR to convert from planar to scalar, there are discrepancies between the two. Because of this, the ratio of satellite_scalar / modelled_scalar is different from satellite_planar / modelled_planar, and it can have a noticeable impact on the resulting light and primary production (PP).  
+
+</div>
+<div class = "col-md-6">
+
+<font size="5">**Figure 1**</font>
+
+![](light_geometry_diagram.png)
+
+</div>
+</div>
+
+Here we'll use Gregg-Carder surface irradiance to compare the differences in these ratios, to get an idea of how much the choice of ratio can affect the resulting light and PP.  
+
+First, the R code used to create the scaling factor after calculating GC light, starting with SatPAR and GC_Ed definitions:  
 
         # SatPAR = satellite PAR, planar form, units = mW/cm2/um
         # GC_Ed = Gregg-Carder light, planar form, units = Watt/m2/nm
@@ -92,6 +110,9 @@ Here we'll use GC-modelled light and satellite PAR to create scaling factors usi
         GC_Ed = sum(Watt_per_m2_to_Mol_per_m2_perhour(Ed, lambda), na.rm=TRUE)
         # Create the scaling factor
         ScalingPARfactor_scalar = SatPAR / GC_Ed
+
+<br>
+*The comparison is done using data from July 2018*  
 
 ```{r}
 
@@ -130,13 +151,12 @@ m1 <- make_raster_map(var_to_rast(df %>% dplyr::select(bin,diff), ext=c(xlims,yl
 ```
 
 
-<br>
-
-### Figure 1
 
 <div class = "row">
 <div class = "col-md-6">
-##### A) Scalar factor vs planar factor
+
+<font size="5">**Figure 2**</font>
+
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 m1
 ```
@@ -144,20 +164,20 @@ m1
 We can see that *ScalingPARfactor_scalar* is noticeably lower than *ScalingPARfactor_planar*, and decreases with latitude. Also note that this is only the surface layer, so the differences would be even more pronounced after adding up the results at each depth.  
 
 </div>
-
 <div class = "col-md-6">
-##### B) Bird vs GC
+
+<font size="5">**Figure 3**</font>
+
 ![](PARmodel_bird-vs-GC_by-sun-altitude_total.gif)
-In this image we see that Gregg-Carder (used in BIOv2) generally gives slightly higher irradiance values than Bird (used in BIOv1).  
+Here we see that Gregg-Carder (used in BIOv2) generally gives slightly higher irradiance values than Bird (used in BIOv1).  
 *Note that in an earlier comparison of Bird and Gregg-Carder, the direct component of Bird was mistakenly left in scalar form so the comparison was not accurate - here they are both in planar form.*  
-<br><br>
 </div>
 </div>
 
 <br>
 
 
-### Figure 2
+<font size="5">**Figure 4**</font>
 
 <div class = "row">
 <div class = "col-md-6">
@@ -180,9 +200,9 @@ B) Using *ScalingPARfactor_planar* for BIOv2
 
 <br>
 
-The combination of the use of the *ScalingPARfactor_scalar* and the Bird model generally makes `BIOv1 <= BIOv2`, as seen in the % difference of the two models in Figure 2B.  
+The combination of the use of the *ScalingPARfactor_scalar* and the Bird model generally makes `BIOv1 <= BIOv2`, as seen in the % difference of the two models in Figure 4B.  
 
-[Note that in Figure 2A, BIOv2 is also using *ScalingPARfactor_scalar*, but the lower % differences and slight latitudinal gradient might be caused by differences in the light geometry in the BIOv1 model, which might be in error and should be addressed later. They could also simply be from legitimate differences in other parts of the primary production models, such as euphotic depth, absorption, backscattering, and attenuation coefficients, and different ways the surface light is adjusted such as using cloud cover fraction]  
+[Note that in Figure 4A, BIOv2 is also using *ScalingPARfactor_scalar*, but the lower % differences and slight latitudinal gradient might be caused by differences in the light geometry in the BIOv1 model, which might be in error and should be addressed later. They could also simply be from legitimate differences in other parts of the primary production models, such as euphotic depth, absorption, backscattering, and attenuation coefficients, and different ways the surface light is adjusted such as using cloud cover fraction]  
 
 ---
 

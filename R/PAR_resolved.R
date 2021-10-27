@@ -63,13 +63,13 @@ nw = 1.34 # refractive index of seawater
 
 PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
     
-    # computer sun angle for day
+    # compute sun angle for day
     xhr = 1:23
     datepxl = doyday(yearpxl,daypxl) + hours(xhr)
     julianpxl = JD(doyday(yearpxl,daypxl))
     tz(datepxl) <- "UTC" # Here using timezone UTC
     
-    # Here we convert PAR from Einstein.m-2.d-1 to mW.cm-2.um-1
+    # Here we convert PAR from Einstein.m-2.d-1 (scalar) to mW.cm-2.um-1 (planar)
     # see seawifs tech report vol 22 page 49 
     # https://oceancolor.gsfc.nasa.gov/atbd/par/seawifs_par_wfigs.pdf
     SatPAR = SatPAR/1.193 
@@ -101,19 +101,38 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
     # si <- surface_irr(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
     si <- surface_irr_c(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
     # above surface
+    Ed <- si$Ed
     Eddir <- si$Eddir
     Eddif <- si$Eddif
     # below surface
     Eqdirw <- si$Eqdirw
     Eqdifw <- si$Eqdifw
     
-    # # THIS IS THE EXACT PROCESS USED IN BIOV1 for the same thing
-    # Ed <- Watt_per_m2_to_Mol_per_m2_perhour(Ed, lambda) # change units to mol per m^2 per hour
-    # Ed <- rowSums(Ed, na.rm=TRUE) # for each hour, integrate across wavebands
-    # Ed <- sum(Ed, na.rm=TRUE) # integrate over the day to get to einsteins/m2/day
-    # ScalingPARfactor = SatPAR * 1.193 / Ed # create scaling factor
-    Ed <- (Eddir + Eddif)/cos(zendR*pi/180) # scalar direct and diffuse, above water surface
-    ScalingPARfactor = SatPAR * 1.193 / sum(Watt_per_m2_to_Mol_per_m2_perhour(Ed, lambda), na.rm=TRUE)
+    
+    # 1. ORIGINAL METHOD - SatPAR and GC irrad in planar form
+    #
+    # Now we use Ed and SatPar to scale Eqdirw and Eqdifw
+    #   Gregg-Carder units: Watt/m2/nm
+    #   SatPAR units: mW/cm2/um
+    # *1000 (W to mW), /10000 (/m2 to /cm2), *1000 (/nm to /um) = *100
+    ScalingPARfactor = SatPAR / (mean(Ed,na.rm=TRUE)*100)
+    
+    
+    # # 2. NEW METHOD - SatPAR and GC irrad in scalar form
+    #
+    # # Note that SatPAR is currently in units of mW.cm-2.um-1 (planar, like Gregg-Carder)
+    # # Ed <- Watt_per_m2_to_Mol_per_m2_perhour(Ed, lambda) # change units to mol per m^2 per hour
+    # # Ed <- rowSums(Ed, na.rm=TRUE) # for each hour, integrate across wavebands
+    # # Ed <- sum(Ed, na.rm=TRUE) # integrate over the day to get to einsteins/m2/day
+    # # ScalingPARfactor = SatPAR / Ed # create scaling factor
+    # Ed <- (Eddir + Eddif)/cos(zendR*pi/180) # scalar direct and diffuse, above water surface
+    # ScalingPARfactor = SatPAR * 1.193 / sum(Watt_per_m2_to_Mol_per_m2_perhour(Ed, lambda), na.rm=TRUE)
+    
+    
+    # Note that it's best to avoid using the 1.193 fudge factor for conversion,
+    # so creating the scaling factor using the planar forms (method 1) is likely 
+    # more accurate
+    
     
     # UNDERWATER DIRECT AND DIFFUSE --- SCALE BY SATELLITE PAR
     Eqdirw = Eqdirw * ScalingPARfactor
