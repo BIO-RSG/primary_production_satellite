@@ -1,5 +1,5 @@
 ---
-title: "Comparing SatPAR scaling factors"
+title: "Comparing light in BIOv1 and BIOv2"
 output: html_document
 ---
 
@@ -58,7 +58,7 @@ ylims <- c(39,82)
 *BIOv1 = BIO primary production model, version 1*  
 *BIOv2 = BIO primary production model, version 2*  
 
-**Investigating differences in light levels of the PAR modelled in BIOv1 vs BIOv2**  
+**Investigating differences in modelled light used in BIOv1 vs BIOv2, caused by choice of model (Bird vs Gregg-Carder) and the method of scaling the modelled PAR to the satellite PAR value**  
 
 In the primary production model, spectral direct and diffuse components of planar surface irradiance at hourly intervals are modelled using Bird or Gregg-Carder, and then must be scaled to the actual PAR value read by the satellite. First, the units and geometry must be converted to be the same as the satellite PAR value:  
 
@@ -67,12 +67,12 @@ In the primary production model, spectral direct and diffuse components of plana
 <div class = "col-md-6">
 
 1. Satellite PAR is modelled first as planar irradiance in units of mW/cm<sup>2</sup>/um, then converted to scalar irradiance in units of Einsteins/m<sup>2</sup>/day simply by multiplying by a factor of **1.193**.  
-2. BIOv1 PAR is modelled first as planar irradiance using Bird in units of Watts/m<sup>2</sup>/um, then converted to scalar irradiance in units of Einsteins/m<sup>2</sup>/day by using the cosine of the solar zenith angle and unit conversions and integration.  
+2. BIOv1 PAR is modelled first as scalar irradiance using Bird in units of Watts/m<sup>2</sup>/um, then converted to scalar irradiance in units of Einsteins/m<sup>2</sup>/day by using unit conversions and integration.  
 3. BIOv2 PAR is modelled first as planar irradiance using Gregg-Carder in units of Watts/m<sup>2</sup>/nm, and converted to units of mW/cm<sup>2</sup>/um so it can be scaled to the satellite PAR planar irradiance.  
 
 Figure 1 shows the scalar and planar components of light.  
 
-Since BIOv1 uses a different method than satellite PAR to convert from planar to scalar, there are discrepancies between the two. Because of this, the ratio of satellite_scalar / modelled_scalar is different from satellite_planar / modelled_planar, and it can have a noticeable impact on the resulting light and primary production (PP).  
+Since BIOv1 and satellite PAR switch between planar and scalar irradiance using different methods (*1.193 for satellite PAR, and using the cosine of the solar zenith angle with unit conversions and integration for BIOv1), there are discrepancies between the two. Because of this, the ratio of satellite_scalar / modelled_scalar is different from satellite_planar / modelled_planar, and it can have a noticeable impact on the resulting light and primary production (PP).  
 
 </div>
 <div class = "col-md-6">
