@@ -115,6 +115,9 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
     #   Gregg-Carder units: Watt/m2/nm
     #   SatPAR units: mW/cm2/um
     # *1000 (W to mW), /10000 (/m2 to /cm2), *1000 (/nm to /um) = *100
+    # Note that we end up with a matrix where row=hour, column=waveband, so we must
+    # take the average light value over the whole day and spectrum to get a result
+    # in the same format at SatPAR (a single average "instantaneous" value for the day)
     ScalingPARfactor = SatPAR / (mean(Ed,na.rm=TRUE)*100)
     
     
