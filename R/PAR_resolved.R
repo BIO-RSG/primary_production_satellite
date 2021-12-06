@@ -109,6 +109,7 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
     Eqdifw <- si$Eqdifw
     
     
+    
     # 1. ORIGINAL METHOD - SatPAR and GC irrad in planar form
     #
     # Now we use Ed and SatPar to scale Eqdirw and Eqdifw
@@ -118,7 +119,13 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
     # Note that we end up with a matrix where row=hour, column=waveband, so we must
     # take the average light value over the whole day and spectrum to get a result
     # in the same format at SatPAR (a single average "instantaneous" value for the day)
-    ScalingPARfactor = SatPAR / (mean(Ed,na.rm=TRUE)*100)
+    # ScalingPARfactor = SatPAR / (mean(Ed,na.rm=TRUE)*100)
+    # 2021-12-02 FIX: The satellite PAR model takes the average over waveband, and then
+    # integrates over time and divides by 24 hours, giving a slightly different result
+    # than if you were to simply take the average over the whole matrix.
+    ScalingPARfactor = SatPAR / (sum(rowMeans(Ed,na.rm=TRUE))/24*100)
+    
+    
     
     
     # # 2. NEW METHOD - SatPAR and GC irrad in scalar form
@@ -205,7 +212,7 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
 # latipxl = 50 # decimal degrees
 # daypxl = 173
 # yearpxl = 2018
-# SatPAR = 24 # einsteins/m^2/day
+# SatPAR = 24 # scalar PAR, einsteins/m^2/day
 # 
 # # load custom functions and necessary libraries
 # library(oceancolouR)    # for various custom functions

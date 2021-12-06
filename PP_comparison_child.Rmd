@@ -1,0 +1,134 @@
+### `r date_bio`
+
+```{r}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+
+#*******************************************************************************
+# get filenames
+
+file_biov1_LHTBI <- paste0(path,"BIO_v1_Carla/",date_bio,"_LHTBI.csv")
+file_biov1_pi <- paste0(path,"BIO_v1_Carla/",date_bio,"_pi-20141113.csv")
+file_biov1_pp <- paste0(path,"BIO_v1_Carla/",date_bio,"_pp.csv")
+
+file_svgpm <- paste0(path,"VGPM/vgpm.viirs.",date_op,".hdf")
+# file_evgpm <- paste0(path,"VGPM/eppley.viirs.",date_op,".hdf")
+# file_cbpm <- paste0(path,"VGPM/cbpm.viirs.",date_op,".hdf")
+
+file_biov2_VPI_NU <- paste0(path,biov2_file,"variablePI_NU_BIO_NWA_monthly_",date_bio,".rda")
+file_biov2_VPI_U <- paste0(path,biov2_file,"variablePI_U_BIO_NWA_monthly_",date_bio,".rda")
+file_biov2_MPI_NU <- paste0(path,biov2_file,"medianPI_NU_BIO_NWA_monthly_",date_bio,".rda")
+file_biov2_MPI_U <- paste0(path,biov2_file,"medianPI_U_BIO_NWA_monthly_",date_bio,".rda")
+
+
+#*******************************************************************************
+# read input data
+
+# get input and pp for bio_v1_carla
+df_biov1 <- dplyr::bind_cols(fread(file_biov1_LHTBI),fread(file_biov1_pi),fread(file_biov1_pp)) %>%
+  dplyr::filter(cppday >= 0) %>%
+  dplyr::rename(bin=Name)
+rast_alphab <- var_to_rast(df_biov1 %>% dplyr::select(bin,alphaB), ext=c(xlims,ylims))
+rast_pmb <- var_to_rast(df_biov1 %>% dplyr::select(bin,PmB), ext=c(xlims,ylims))
+rast_chl <- var_to_rast(df_biov1 %>% dplyr::mutate(chl=log10(chlor_a)) %>% dplyr::select(bin,chl), ext=c(xlims,ylims))
+rast_lat <- var_to_rast(df_biov1 %>% dplyr::select(bin,Latitude), ext=c(xlims,ylims))
+rast_bathy <- var_to_rast(df_biov1 %>% dplyr::select(bin,height) %>% dplyr::mutate(height=-height), ext=c(xlims,ylims))
+rast_biov1 <- var_to_rast(df_biov1 %>% dplyr::select(bin,cppday), ext=c(xlims,ylims))
+
+# get ocean productivity pp
+rast_svgpm <- get_op_pp(file_svgpm,rast_biov1)
+# rast_evgpm <- get_op_pp(file_evgpm,rast_biov1)
+# rast_cbpm <- get_op_pp(file_cbpm,rast_biov1)
+
+# get biov2 pp
+load(file_biov2_VPI_NU)
+rast_biov2_VPI_NU = var_to_rast(rda_output %>% dplyr::select(bin, PP), ext=c(xlims,ylims))
+load(file_biov2_VPI_U)
+rast_biov2_VPI_U = var_to_rast(rda_output %>% dplyr::select(bin, PP), ext=c(xlims,ylims))
+load(file_biov2_MPI_NU)
+rast_biov2_MPI_NU = var_to_rast(rda_output %>% dplyr::select(bin, PP), ext=c(xlims,ylims))
+load(file_biov2_MPI_U)
+rast_biov2_MPI_U = var_to_rast(rda_output %>% dplyr::select(bin, PP), ext=c(xlims,ylims))
+
+```
+
+
+#### Input variables for BIOv1
+
+```{r, fig.height=4, fig.width=10}
+r1 <- make_raster_map(rast_alphab, title="alphaB_BIOv1")
+r2 <- make_raster_map(rast_pmb, title="PmB_BIOv1")
+r3 <- make_raster_map(rast_chl, title="log10(chl)_BIOv1")
+wrap_plots(list(r1,r2,r3),nrow=1,byrow=TRUE)
+```
+
+<br>
+
+#### Original models
+
+```{r, fig.height=4.5, fig.width=10}
+pp_rasts <- stack(set_lims(rast_biov1, col_limits_pp),
+                  set_lims(rast_svgpm, col_limits_pp))#,
+                  # set_lims(rast_evgpm, col_limits_pp),
+                  # set_lims(rast_cbpm, col_limits_pp))
+names(pp_rasts) <- c("DailyPP_BIOv1",
+                     "DailyPP_Standard_VGPM")#,
+                     # "DailyPP_Eppley_VGPM",
+                     # "DailyPP_CbPM")
+m1 <- make_raster_map(pp_rasts, col_limits=col_limits_pp) + theme(plot.margin=unit(c(0,0,0,0),"mm"))
+# diff_rast <- rast_vgpm
+# values(diff_rast) <- pdiff(as.matrix(rast_biov1),as.matrix(rast_vgpm))
+# m2 <- make_raster_map(diff_rast, title="Percent_difference", col_limits=c(-100,100), cm = colorRampPalette(c("blue","white","red"))(100)) + theme(plot.margin=unit(c(1,0,0,5),"mm")) + ggtitle("Percent difference")
+# m2_dens <- dens_plot(diff_rast,xlims) + theme(plot.margin=unit(c(0,0,1,3),"mm"))
+# m1 + {m2_dens / m2 + plot_layout(heights=c(1,6))} + plot_layout(widths=c(5,2))
+m1
+```
+
+<br>
+
+#### New models
+
+```{r, fig.height=3, fig.width=10}
+pp_rasts <- stack(set_lims(rast_biov2_VPI_NU, col_limits_pp),
+                  set_lims(rast_biov2_VPI_U, col_limits_pp),
+                  set_lims(rast_biov2_MPI_NU, col_limits_pp),
+                  set_lims(rast_biov2_MPI_U, col_limits_pp))
+names(pp_rasts) <- c("DailyPP_BIOv2_VPI_NU",
+                     "DailyPP_BIOv2_VPI_U",
+                     "DailyPP_BIOv2_MPI_NU",
+                     "DailyPP_BIOv2_MPI_U")
+make_raster_map(pp_rasts, col_limits=col_limits_pp)
+```
+
+<br>
+
+##### Percent difference between new models and BIOv1
+
+```{r, fig.height=5, fig.width=10}
+pdiff_maps(rast_biov1,xlims,rast_biov2_VPI_NU,rast_biov2_VPI_U,rast_biov2_MPI_NU,rast_biov2_MPI_U,col_limits_pdiff,rast_chl,rast_lat,rast_bathy)
+```
+
+<br>
+
+##### Percent difference between new models and Standard VGPM
+
+```{r, fig.height=5, fig.width=10}
+pdiff_maps(rast_svgpm,xlims,rast_biov2_VPI_NU,rast_biov2_VPI_U,rast_biov2_MPI_NU,rast_biov2_MPI_U,col_limits_pdiff,rast_chl,rast_lat,rast_bathy)
+```
+
+<br>
+
+<!-- ##### Percent difference between new models and Eppley VGPM -->
+
+<!-- ```{r, fig.height=5, fig.width=10} -->
+<!-- pdiff_maps(rast_evgpm,xlims,rast_biov2_VPI_NU,rast_biov2_VPI_U,rast_biov2_MPI_NU,rast_biov2_MPI_U,col_limits_pdiff,rast_chl,rast_lat,rast_bathy) -->
+<!-- ``` -->
+
+<!-- <br> -->
+
+<!-- ##### Percent difference between new models and CbPM -->
+
+<!-- ```{r, fig.height=5, fig.width=10} -->
+<!-- pdiff_maps(rast_cbpm,xlims,rast_biov2_VPI_NU,rast_biov2_VPI_U,rast_biov2_MPI_NU,rast_biov2_MPI_U,col_limits_pdiff,rast_chl,rast_lat,rast_bathy) -->
+<!-- ``` -->
+
+<!-- <br> -->

@@ -27,7 +27,7 @@ ylims <- c(39,82)
 #       return(presolved) in full_PP_calc() after presolved is calculated
 # PAR_resolved:
 #       after surface_irr_c and E variables retrieved:
-#           planar_factors <- c(SatPAR,mean(Ed,na.rm=TRUE)*100)
+#           planar_factors <- c(SatPAR, sum(rowMeans(Ed,na.rm=TRUE))/24*100)
 #           Ed <- Ed/cos(zendR*pi/180) # scalar direct and diffuse, above water surface
 #           scalar_factors <- c(SatPAR * 1.193, sum(Watt_per_m2_to_Mol_per_m2_perhour(Ed, lambda), na.rm=TRUE))
 #           return(c(planar_factors, scalar_factors))
@@ -40,7 +40,7 @@ ylims <- c(39,82)
 # biov1_date <- "201807"
 # uniform_profile <- TRUE
 # use_constant_alphab <- use_constant_pmb <- FALSE
-# source("run_PP.R")
+# source("02_run_PP.R")
 # df = data.frame(t(result),stringsAsFactors = FALSE)
 # colnames(df) <- c("SatPAR_planar", "GC_Ed_planar", "SatPAR_scalar", "GC_Ed_scalar")
 # df <- dplyr::left_join(data.frame(bin=nwa_bins_4km, stringsAsFactors = FALSE),
@@ -51,6 +51,7 @@ ylims <- c(39,82)
 #     dplyr::mutate(planar_fraction=SatPAR_planar/GC_Ed_planar,
 #                   scalar_fraction=SatPAR_scalar/GC_Ed_scalar) %>%
 #     dplyr::mutate(diff=scalar_fraction-planar_fraction)
+# filename <- "201807_satPAR_scaling_test.rda"
 # save(result, df, file=filename, compress=TRUE)
 
 ```
@@ -92,12 +93,14 @@ First, the R code used to create the scaling factor after calculating GC light, 
         # GC_Ed = Gregg-Carder light, planar form, units = Watt/m2/nm
 
 1. Using planar geometry:  
-    
+
         # Unit conversion factor: *1000 (W to mW), /10000 (/m2 to /cm2), *1000 (/nm to /um) = *100
         # Note that in PAR_resolved(), we end up with a matrix where row=hour, column=waveband,
-        # so we must take the average light value over the whole day and spectrum to get a
-        # result in the same format at SatPAR (a single average "instantaneous" value for the day)
-        ScalingPARfactor_planar = SatPAR / (mean(GC_Ed, na.rm=TRUE) * 100)
+        # so we must take the average radiance over the spectrum, then integrate over time,
+        # and divide by 24 hours, following the same method as the satellite PAR model
+        # to get a single average "instantaneous" radiance for the day.
+        ScalingPARfactor_planar = SatPAR / (sum(rowMeans(Ed,na.rm=TRUE))/24*100)
+        
     
 2. Using scalar geometry:  
     

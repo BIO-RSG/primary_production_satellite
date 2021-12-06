@@ -259,10 +259,15 @@ List sam_penguin_C(NumericVector chl, NumericVector I0_direct, NumericVector I0_
             AY[i] = exp(x);
         }
         
+        // // Get total scalar and planar irradiance Iz
+        // Iz_scalar[i] = I0_direct[i] + I0_diffuse[i]; // I think I0_diffuse is in planar form here, needs to be divided by cos(ZEN) or something
+        // Iz_planar[i] = I0_direct[i] * cos(ZENW) + I0_diffuse[i];
+        // mu_d[i] = (I0_direct[i] * cos(ZENW) + I0_diffuse[i] * 0.831) / Iz_scalar[i]; //diffuse might already be planar, look at bird() - i.e. don't need to multiply by 0.831?
+        
         // Get total scalar and planar irradiance Iz
-        Iz_scalar[i] = I0_direct[i] + I0_diffuse[i];
-        Iz_planar[i] = I0_direct[i] * cos(ZENW) + I0_diffuse[i];//should I0_diffuse be multiplied by 0.831 here?
-        mu_d[i] = (I0_direct[i] * cos(ZENW) + I0_diffuse[i] * 0.831) / Iz_scalar[i];
+        Iz_scalar[i] = I0_direct[i] + I0_diffuse[i]/0.831; // I think I0_diffuse is in planar form here, needs to be divided by cos(ZEN) or something
+        Iz_planar[i] = I0_direct[i] * cos(ZENW) + I0_diffuse[i];
+        mu_d[i] = Iz_planar[i] / Iz_scalar[i];
         
     }
     
@@ -348,6 +353,9 @@ List sam_penguin_C(NumericVector chl, NumericVector I0_direct, NumericVector I0_
             
             // Compute PAR for this depth (integration over wavelength, using Riemann sum)
             tmpPARz = tmpPARz + (Iz_scalar[j] * 5);
+            
+            
+            // I think this should be Iz_scalar instead of Iz_planar
             
             tmpXXz = tmpXXz + (alphaB * Iz_planar[j] * AC[j] * 6022 / ACmean / mu_d[j] / 2.77 / 36) * 5;
             
