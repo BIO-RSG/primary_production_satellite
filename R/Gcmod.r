@@ -6,7 +6,7 @@
 #  of Gregg and Carder 1990.  This is the data of Table 1 in the L&O
 #  paper, with values added to extend the model to 800 nm.
 
-data_atm <- read.table("data/gcirrad.txt",skip=4,header=TRUE)
+data_atm <- read.table("../data/gcirrad.txt",skip=4,header=TRUE)
 # THIS GOES FROM 350-801NM, BUT WE'RE ONLY INTERESTED IN THESE INDICES: 51:351 (400-700nm)
 
 inds <- 51:351

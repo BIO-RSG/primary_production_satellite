@@ -10,24 +10,13 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 
 library(ggplot2)
-library(oce)
-library(insol)
 library(stringr)
 library(lubridate)
-library(Rcpp)
 library(patchwork)
 library(dplyr)
 library(DT)
 library(DiagrammeR)
-
-source("R/bird.R")
-source("R/I0_corr_season.R")
-source("R/I0_corr_cloud_BIO.R")
-source("R/I0_corr_refl_loss.R")
-source("R/PAR_resolved.R")
-source("R/Gcmod.r")
-# sourceCpp("underwater_irradiance.cpp")
-# sourceCpp("surface_irradiance.cpp")
+source("../R/Gcmod.r")
 ```
 
 ***
@@ -203,7 +192,7 @@ DT::datatable(df,
     <td width="30" valign="top"></td>
     <td width="300" valign="top"><br>First, the total surface irradiance must be calculated. This can be separated into its direct and diffuse components, and the planar component of each (i.e. the downward component of the light) can be calculated from the full scalar value by multiplying it by the cosine of the solar zenith angle (Figure 2).<br><br><br><br><br><br><br><br>**Figure 2:** Components of surface irradiance.</td>
     <td width="20"></td>
-    <td width="500" valign="top"><img src="images/light_geometry_diagram.png" align="left" width="600"></td>
+    <td width="500" valign="top"><img src="../images/light_geometry_diagram.png" align="left" width="600"></td>
   </tr>
 </table>
 <br>
@@ -271,7 +260,7 @@ DT::formatStyle(names(df),lineHeight='80%')
 <tr>
 <td width="500" valign="top">
 ```{r, echo=FALSE}
-df <- read.table("data/gcirrad.txt",skip=4,header=TRUE) %>%
+df <- read.table("../data/gcirrad.txt",skip=4,header=TRUE) %>%
     dplyr::filter(between(wavel, 400, 700)) %>%
     dplyr::mutate(Fo = round(sapply(Fobar, solar_irr, jday=daypxl),4)) %>%
     dplyr::rename(lam = wavel, oza=a_O3, ag=a_O2, aw=a_H2O) %>%
@@ -315,10 +304,10 @@ Table 4: Lookup table for wavelength-dependent Gregg-Carder input.<br>*Fobar* = 
 
 <div class = "row">
 <div class = "col-md-6">
-![](images/PARmodel_bird-vs-GC_by-sun-altitude.gif)
+![](../images/PARmodel_bird-vs-GC_by-sun-altitude.gif)
 </div>
 <div class = "col-md-6">
-![](images/sun_altitudes.gif)
+![](../images/sun_altitudes.gif)
 </div>
 </div>
 

@@ -46,7 +46,7 @@ options(knitr.duplicate.label = 'allow')
 subpage_env <- new.env()
 dates <- c("201210","201501","201704","201807")
 txt <- "*<b>Fig.1:</b><br>% difference for DATE_HERE between BIOv2 and other models when using:<br>- Same input as BIOv1 (left),<br>- New monthly input with variable PI parameters and a nonuniform profile (center), and<br>- New monthly input with the same PI parameter for the entire map and a uniform biomass profile (right).*<br><br>Note that the new monthly input (used in columns 2 and 3) was created with CHL_POLY4 instead of CHL_OCX like BIOv1 and VGPM. They use the same PI parameters as in column 1, but the biomass profile in column 2 is scaled using CHL_POLY4 instead of CHL_OCX."
-fig <- "images/summary_fig01_DATE_HERE.png"
+fig <- "../images/summary_fig01_DATE_HERE.png"
 for (i in 1:length(dates)) {
   # Assign filtered data and product group to subpage_env 
   assign("date", dates[i], subpage_env)
@@ -70,7 +70,7 @@ options(knitr.duplicate.label = 'allow')
 subpage_env <- new.env()
 dates <- c("201210","201501","201704","201807")
 txt <- "*<b>Fig.2:</b><br>Density plot for DATE_HERE of BIOv2 PP using monthly composites as input, all corresponding 8day composites, or all corresponding daily composites.*"
-fig <- "images/summary_fig02_DATE_HERE.png"
+fig <- "../images/summary_fig02_DATE_HERE.png"
 for (i in 1:length(dates)) {
   # Assign filtered data and product group to subpage_env 
   assign("date", dates[i], subpage_env)

@@ -52,7 +52,7 @@ source("PP_comparison_rmd_functions.R")
 xlims <- c(-95,-42)
 ylims <- c(39,82)
 
-path <- "model_comparisons/"
+path <- "../model_comparisons/"
 
 # after this, it's something like ([composite]_[datestring].rda)
 biov2_file_VPI_NU <- "BIOv2_vs_BIOv1/BIOv2_BIOv1-input_variablePI_NU_BIO_NWA_"
