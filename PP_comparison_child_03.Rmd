@@ -1,0 +1,137 @@
+### `r date_bio_monthly`
+
+<style>
+  .superbigimage{
+      overflow-x:scroll;
+      white-space: nowrap;
+  }
+  .superbigimage img{
+     max-width: none;
+  }
+</style>
+
+```{r}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+
+#*******************************************************************************
+# get filenames
+
+file_biov2_monthly <- paste0(path,biov2_file,"monthly_",date_bio_monthly,".rda")
+file_biov2_8day <- paste0(path,biov2_file,"8day_",date_bio_8day,".rda")
+file_biov2_daily_8day <- paste0(path,biov2_file,"daily_",date_bio_daily_8day,".rda")
+file_biov2_daily_month <- paste0(path,biov2_file,"daily_",date_bio_daily_month,".rda")
+
+
+#*******************************************************************************
+# read input data
+
+# get biov2 pp and variables
+load(file_biov2_monthly)
+vec_biov2_month <- as.numeric(rda_output$PP)
+rast_biov2_month = var_to_rast(rda_output %>% dplyr::select(bin, PP), ext=c(xlims,ylims))
+rast_biov2_month_chl = var_to_rast(rda_output %>% dplyr::select(bin, chl), ext=c(xlims,ylims))
+rast_biov2_lat = var_to_rast(rda_output %>% dplyr::select(bin, lat), ext=c(xlims,ylims))
+rast_biov2_bathy = var_to_rast(rda_output %>% dplyr::select(bin, bathy), ext=c(xlims,ylims))
+rast_biov2_8day = rast_biov2_8day_chl = list()
+vec_biov2_8day <- list()
+for (j in 1:length(file_biov2_8day)) {
+    load(file_biov2_8day[j])
+    vec_biov2_8day[[j]] <- as.numeric(rda_output$PP)
+    rast_biov2_8day[[j]] <- var_to_rast(rda_output %>% dplyr::select(bin, PP), ext=c(xlims,ylims))
+    rast_biov2_8day_chl[[j]] <- var_to_rast(rda_output %>% dplyr::select(bin, chl), ext=c(xlims,ylims))
+}
+vec_biov2_8day <- do.call(c, vec_biov2_8day)
+rast_biov2_daily = list()
+for (j in 1:length(file_biov2_daily_8day)) {
+    load(file_biov2_daily_8day[j])
+    rast_biov2_daily[[j]] <- var_to_rast(rda_output %>% dplyr::select(bin, PP), ext=c(xlims,ylims))
+}
+
+# get daily PP vectors for density plot
+vec_biov2_daily <- list()
+for (j in 1:length(file_biov2_daily_month)) {
+    load(file_biov2_daily_month[j])
+    vec_biov2_daily[[j]] <- as.numeric(rda_output$PP)
+}
+vec_biov2_daily <- do.call(c, vec_biov2_daily)
+
+```
+
+
+#### Monthly average daily PP
+
+```{r, fig.height=4, fig.width=4}
+make_raster_map(set_lims(rast_biov2_month, col_limits_pp), col_limits=col_limits_pp) + theme(plot.margin=unit(c(0,0,0,0),"mm"))
+```
+
+
+<br>
+
+##### 8day average daily PP, and % difference from monthly average
+
+Note that the %error - chla correlation coefficient here was calculated using the monthly chla.  
+
+```{r}
+pp_rasts <- lapply(rast_biov2_8day, set_lims, lims=col_limits_pp) %>% raster::stack()
+names(pp_rasts) <- date_bio_8day
+p1 <- make_raster_map(pp_rasts, col_limits=col_limits_pp) + theme(plot.margin=unit(c(0,0,0,0),"mm"))
+p2 <- arrange_maps(rast_biov2_month, xlims, rast_biov2_8day, date_bio_8day, col_limits_pdiff, rast_biov2_month_chl, rast_biov2_lat, rast_biov2_bathy)
+```
+
+```{r, fig.height=7.5, fig.width=8}
+layout <- "A
+           A
+           B
+           B
+           B"
+p1 / p2 + plot_layout(design=layout)
+```
+
+
+<br>
+
+#### 8day average daily PP
+
+```{r, fig.height=4, fig.width=4}
+make_raster_map(rast_biov2_8day[[2]], title=date_bio_8day[2], col_limits=col_limits_pp)
+```
+
+<br>
+
+##### Daily PP, and % difference from 8day average
+
+Note that the %error - chla correlation coefficient here was calculated using the 8day chla.  
+
+```{r, fig.height=4, fig.width=12}
+pp_rasts <- lapply(rast_biov2_daily, set_lims, lims=col_limits_pp) %>% raster::stack()
+names(pp_rasts) <- date_bio_daily_8day
+p1 <- make_raster_map(pp_rasts, col_limits=col_limits_pp, nrow=1) + theme(plot.margin=unit(c(0,0,0,0),"mm"))
+p2 <- arrange_maps(rast_biov2_8day[[2]], xlims, rast_biov2_daily, date_bio_daily_8day, col_limits_pdiff, rast_biov2_8day_chl[[2]], rast_biov2_lat, rast_biov2_bathy, nrow=1)
+```
+<div class="superbigimage">
+```{r, fig.height=7.5, fig.width=16}
+p1 / p2 + plot_layout(design=layout)
+```
+</div>
+
+<br>
+
+##### Summary
+
+Density plot of PP generated in the Northwest Atlantic using monthly, 8day, or daily input.  
+
+```{r fig.width=8, fig.height=4}
+
+pp_df <- data.frame(Input=c(rep("monthly",length(vec_biov2_month)),
+                            rep("8day",length(vec_biov2_8day)),
+                            rep("daily",length(vec_biov2_daily))),
+                    PP=c(vec_biov2_month, vec_biov2_8day, vec_biov2_daily))
+
+p <- ggplot(pp_df) +
+  geom_density(aes(PP, fill=Input), alpha=0.4) +
+  scale_x_log10() +
+  labs(x="Primary production (daily average, mg C / m^2 / day)") +
+  theme_bw() +
+  theme(axis.title.y=element_blank())
+print(p)
+```

@@ -1,0 +1,120 @@
+---
+title: "PP project summary"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+library(lubridate)
+```
+
+The latest version of the BIO primary production (PP) model, *BIOv2*, is explained **[HERE](pp_model_description.html)**. The model calculates PP by integrating light over the visible spectrum, at a series of depths and at each hour, then calculating PP and integrating over depth and time. The resulting PP is in units of **mg C / m<sup>2</sup> / day**, and is the total primary production per day in the water column, averaged over the time period of the input data (i.e. an 8day period, if the satellite input data is in 8day composites).  
+
+Here, the results are compared to other models (BIOv1 and VGPM), and to itself using different input composites.  
+
+<br>
+
+# Model comparisons
+
+1. Same input as BIOv1 (Fig.1)  
+Comparing BIOv2 to BIOv1 and VGPM, using the same input file as BIOv1:  
+[PP_comparison_01_BIOv2_vs_BIOv1_20211210](PP_comparison_01_BIOv2_vs_BIOv1_20211222.html)  
+
+2. New input, monthly composite (Fig.1)  
+Same comparison but using our own input for BIOv2, collected from the panCanadian dataset (daily 4km-resolution binned files) and converted into monthly composites using a simple arithmetic average, and replacing CHL_OCX with CHL_POLY4 (Clay et al, 2019):  
+[PP_comparison_02_BIOv2-monthly_vs_BIOv1-monthly_20211212](PP_comparison_02_BIOv2-monthly_vs_BIOv1-monthly_20211222.html)  
+
+3. New input, monthly/8day/daily composites (Fig.2)  
+Comparing new model using different composite lengths for input (monthly, 8day, or daily):  
+[PP_comparison_03_BIOv2-monthly-8day-daily_20211212](PP_comparison_03_BIOv2-monthly-8day-daily_20211222.html)  
+
+<br>
+
+
+## Figure 1 {.tabset}
+
+```
+% difference = 100 * (BIOv2_PP - x) / x  
+x = BIOv1_PP or VGPM_PP  
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+out = NULL
+# Set knitr options to allow duplicate labels (needed for the subpages)
+options(knitr.duplicate.label = 'allow')
+# Create temporary environment which we use for knitting PP_comparison_child.Rmd
+subpage_env <- new.env()
+dates <- c("201210","201501","201704","201807")
+txt <- "*<b>Fig.1:</b><br>% difference for DATE_HERE between BIOv2 and other models when using:<br>- Same input as BIOv1 (left),<br>- New monthly input with variable PI parameters and a nonuniform profile (center), and<br>- New monthly input with the same PI parameter for the entire map and a uniform biomass profile (right).*<br><br>Note that the new monthly input (used in columns 2 and 3) was created with CHL_POLY4 instead of CHL_OCX like BIOv1 and VGPM. They use the same PI parameters as in column 1, but the biomass profile in column 2 is scaled using CHL_POLY4 instead of CHL_OCX."
+fig <- "images/summary_fig01_DATE_HERE.png"
+for (i in 1:length(dates)) {
+  # Assign filtered data and product group to subpage_env 
+  assign("date", dates[i], subpage_env)
+  assign("txt", txt, subpage_env)
+  assign("fig", fig, subpage_env)
+  # Knit PP_comparison_summary_child.Rmd using the subpage_env and add result to out vector
+  out = c(out, knitr::knit_child('PP_comparison_summary_child.Rmd', envir = subpage_env))
+}
+```
+
+`r paste(knitr::knit_child(text=out, quiet=TRUE), collapse = '')`
+
+
+## Figure 2 {.tabset}
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+out = NULL
+# Set knitr options to allow duplicate labels (needed for the subpages)
+options(knitr.duplicate.label = 'allow')
+# Create temporary environment which we use for knitting PP_comparison_child.Rmd
+subpage_env <- new.env()
+dates <- c("201210","201501","201704","201807")
+txt <- "*<b>Fig.2:</b><br>Density plot for DATE_HERE of BIOv2 PP using monthly composites as input, all corresponding 8day composites, or all corresponding daily composites.*"
+fig <- "images/summary_fig02_DATE_HERE.png"
+for (i in 1:length(dates)) {
+  # Assign filtered data and product group to subpage_env 
+  assign("date", dates[i], subpage_env)
+  assign("txt", txt, subpage_env)
+  assign("fig", fig, subpage_env)
+  # Knit PP_comparison_summary_child.Rmd using the subpage_env and add result to out vector
+  out = c(out, knitr::knit_child('PP_comparison_summary_child.Rmd', envir = subpage_env))
+}
+```
+
+`r paste(knitr::knit_child(text=out, quiet=TRUE), collapse = '')`
+
+
+# Comments
+
+- Input to use:  
+  - CHL_POLY4 (more accurate in NWA), gap-filled with DINEOF.  
+  - 8day composites:  
+    - From Figure 2, we can see that the results are similar no matter the composite used for input, with a slightly wider range of values over shorter composites.  
+    - Daily resolution is too fine - 8day is better at filling images with low coverage, and gap-filling and PP processing are much faster and more manageable.  
+- Only used VIIRS for evaluation here, but can use other sensors operationally (MODIS and SeaWiFS).  
+
+# To-do list
+
+- Update some models and coefficients in the absorption and scattering code:  
+  - aphy (Devred et al 2006)  
+  - Sy for ays (Bricaud et al 1981)  
+  - fracys for ays  
+  - fays <- function(ay443,S) {ay443*exp(-S*(lambda-443))} # yellow substances absorption?  
+  - BC - no spectral dependence at chl=1 with current model, need to check this  
+  - physca <- function(bbp555,bbps) (bbp555*(555/lambda)^(bbps)) # phytoplankton backscattering, Sathyendranath et al (2001)?  
+- Collect PI and biomass profile parameters and figure out a new method for applying them (one value over the whole map, pixel-by-pixel, or by region - and how would the regions be defined?).  
+- Decide whether to use a uniform or nonuniform biomass profile in the water column.  
+- Currently using daily PAR, which will be averaged over 8 days - investigate if these values should be considered reliable.  
+- Compare PP calculated using the current model and using a model where irradiance is adjusted by cloud fraction.  
+- Compare Gregg-Carder to [COART](https://satcorps.larc.nasa.gov/jin/coart.html) at more solar zenith angles and direct/diffuse separation?  
+
+
+# References
+
+[BIOv1 model - Platt, T., Caverhill, C., and Sathyendranath, S. (1991), Basin-scale estimates of oceanic primary production by remote sensing: The North Atlantic, J. Geophys. Res., 96( C8), 15147– 15159, doi:10.1029/91JC01118.](https://agupubs.onlinelibrary.wiley.com/doi/10.1029/91JC01118)  
+
+[BIOv2 references](pp_model_description.html)  
+
+[VGPM model](http://sites.science.oregonstate.edu/ocean.productivity/vgpm.model.php)  
+
+<br><br>

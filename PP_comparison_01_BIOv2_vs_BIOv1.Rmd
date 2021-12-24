@@ -1,0 +1,114 @@
+---
+title: "PP model comparisons"
+output: html_document
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_file = paste0("PP_comparison_01_BIOv2_vs_BIOv1_", format(Sys.Date(), "%Y%m%d"))) })
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+library(data.table)
+library(oceancolouR)
+library(raster)
+library(ggplot2)
+library(ggpp)
+library(rasterVis)
+library(patchwork)
+library(dplyr)
+library(ncdf4)
+source("PP_comparison_rmd_functions.R")
+
+# The data for this comparison are created by using input files from BIOv1 and
+# changing 02_run_PP.R like so:
+# 1. Comment out the variables listed below (d_list etc, within 02_run_PP.R), so they won't overwrite these selections.
+# 2. Uncomment "FOR PP COMPARISON 01" starred section and comment out "LOAD INPUT" sections
+#
+# ...now run this code:
+# library(lubridate)
+# biov1_dates <- c("201210", "201501", "201704", "201807")
+# d_list <- as_date(paste0(biov1_dates,"01"), format="%Y%m%d")
+# composite <- "monthly"
+# uniform_profiles <- c(TRUE, FALSE)
+# nc_outs <- c("medianPI_U", "variablePI_NU")
+# pi_param_settings <- c(TRUE, FALSE)
+# alphab_method <- pmb_method <- "median"
+# input_path <- "model_comparisons/BIO_v1_Carla/"
+# output_path <- "model_comparisons/BIOv2_vs_BIOv1/"
+# for (j in 1:length(uniform_profiles)) {
+#     uniform_profile <- uniform_profiles[j]
+#     nc_out <- paste0("BIOv2_BIOv1-input_", nc_outs[j])
+#     use_constant_alphab <- use_constant_pmb <- pi_param_settings[j]
+#     source("02_run_PP.R")
+#     rm(list=setdiff(ls(), c("j", "biov1_dates", "d_list", "composite", "uniform_profiles",
+#                             "nc_outs", "pi_param_settings", "alphab_method", "pmb_method",
+#                             "input_path", "output_path")))
+#     gc()
+# }
+
+
+#*******************************************************************************
+# variables to change
+
+xlims <- c(-95,-42)
+ylims <- c(39,82)
+
+path <- "model_comparisons/"
+
+# after this, it's something like ([composite]_[datestring].rda)
+biov2_file_VPI_NU <- "BIOv2_vs_BIOv1/BIOv2_BIOv1-input_variablePI_NU_BIO_NWA_"
+biov2_file_MPI_U <- "BIOv2_vs_BIOv1/BIOv2_BIOv1-input_medianPI_U_BIO_NWA_"
+
+# date system used for BIO files
+dates_bio <- c("201210","201501","201704","201807")
+# date system used for Ocean Productivity files
+# http://sites.science.oregonstate.edu/ocean.productivity/custom.php
+dates_op <- c("2012275","2015001","2017091","2018182")
+
+col_limits_pp <- c(0,3000)
+col_limits_pdiff <- c(-100,100)
+
+```
+
+
+This is a comparison of variations of BIOv2 with BIOv1 and VGPM, using the same input data as BIOv1. Input is from monthly composites, output is total daily primary production (mg C / m<sup>2</sup> / day), averaged over the month. Note that with the exception of the MODIS cloud cover fraction used in BIO_v1, all of these models use data from VIIRS-SNPP.  
+
+First, the PI parameters alphaB and PmB, along with log10(chl) are mapped to show spatial patterns that influence models BIOv1 and BIOv2_VPI_NU. Second, BIOv1 and VGPM models are mapped, and variations of the new models:  
+
+1. *VPI_NU* - variable PI parameters (i.e. allowed to vary pixel-to-pixel) with nonuniform biomass profile (biomass profile parameters also vary by pixel)  
+2. *MPI_U* - median PI parameters of the whole region, and uniform biomass profile  
+
+Finally, the percent difference between the new model and BIOv1 and VGPM are mapped, with a table of Pearson's correlation coefficients between percent difference and three variables: chla, latitude, bathymetry. Note that the x-axis range of the density plots is the mean +- 2stdev.  
+
+`% difference = (100 * (BIOv2 - y) / y)`  
+y = BIOv1 or VGPM  
+
+
+## Results {.tabset}
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+
+out = NULL
+# Set knitr options to allow duplicate labels (needed for the subpages)
+options(knitr.duplicate.label = 'allow')
+# Create temporary environment which we use for knitting PP_comparison_child.Rmd
+subpage_env <- new.env()
+
+for (i in 1:length(dates_bio)) {
+  
+  date_bio <- dates_bio[i]
+  date_op <- dates_op[i]
+
+  # Assign filtered data and product group to subpage_env 
+  assign("date_bio", date_bio, subpage_env)
+  assign("date_op", date_op, subpage_env)
+  assign("col_limits_pp", col_limits_pp, subpage_env)
+  assign("col_limits_pdiff", col_limits_pdiff, subpage_env)
+  
+  # Knit PP_comparison_child.Rmd using the subpage_env and add result to out vector
+  out = c(out, knitr::knit_child('PP_comparison_child_01-02.Rmd', envir = subpage_env))
+  
+}
+
+```
+
+`r paste(knitr::knit_child(text=out, quiet=TRUE), collapse = '')`

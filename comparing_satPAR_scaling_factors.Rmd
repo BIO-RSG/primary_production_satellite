@@ -80,7 +80,7 @@ Since BIOv1 and satellite PAR switch between planar and scalar irradiance using 
 
 <font size="5">**Figure 1**</font>
 
-![](light_geometry_diagram.png)
+![](images/light_geometry_diagram.png)
 
 </div>
 </div>
@@ -171,7 +171,7 @@ We can see that *ScalingPARfactor_scalar* is noticeably lower than *ScalingPARfa
 
 <font size="5">**Figure 3**</font>
 
-![](PARmodel_bird-vs-GC_by-sun-altitude_total.gif)
+![](images/PARmodel_bird-vs-GC_by-sun-altitude_total.gif)
 Here we see that Gregg-Carder (used in BIOv2) generally gives slightly higher irradiance values than Bird (used in BIOv1).  
 *Note that in an earlier comparison of Bird and Gregg-Carder, the direct component of Bird was mistakenly left in scalar form so the comparison was not accurate - here they are both in planar form.*  
 </div>
@@ -184,7 +184,7 @@ Here we see that Gregg-Carder (used in BIOv2) generally gives slightly higher ir
 
 <div class = "row">
 <div class = "col-md-6">
-![](pdiff_biov2_v1.png)
+![](images/pdiff_biov2_v1.png)
 
 </div>
 <div class = "col-md-6">
