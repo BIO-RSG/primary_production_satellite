@@ -1,0 +1,96 @@
+### `r date_bio`
+
+```{r}
+knitr::opts_chunk$set(echo = FALSE, message=FALSE, warning=FALSE)
+
+#*******************************************************************************
+# get filenames
+
+file_biov1_LHTBI <- paste0(path,"BIO_v1_Carla/",date_bio,"_LHTBI.csv")
+file_biov1_pi <- paste0(path,"BIO_v1_Carla/",date_bio,"_pi-20141113.csv")
+file_biov1_pp <- paste0(path,"BIO_v1_Carla/",date_bio,"_pp.csv")
+
+file_svgpm <- paste0(path,"VGPM/vgpm.viirs.",date_op,".hdf")
+
+file_biov2_month_VPI_NU <- paste0(path,biov2_file_VPI_NU,"monthly_",date_bio,".rda")
+file_biov2_month_MPI_U <- paste0(path,biov2_file_MPI_U,"monthly_",date_bio,".rda")
+
+
+#*******************************************************************************
+# read input data
+
+# get input and pp for bio_v1_carla
+df_biov1 <- dplyr::bind_cols(fread(file_biov1_LHTBI),fread(file_biov1_pi),fread(file_biov1_pp)) %>%
+  dplyr::filter(cppday >= 0) %>%
+  dplyr::rename(bin=Name)
+rast_alphab <- var_to_rast(df_biov1 %>% dplyr::select(bin,alphaB), ext=c(xlims,ylims))
+rast_pmb <- var_to_rast(df_biov1 %>% dplyr::select(bin,PmB), ext=c(xlims,ylims))
+rast_chl <- var_to_rast(df_biov1 %>% dplyr::mutate(chl=log10(chlor_a)) %>% dplyr::select(bin,chl), ext=c(xlims,ylims))
+rast_lat <- var_to_rast(df_biov1 %>% dplyr::select(bin,Latitude), ext=c(xlims,ylims))
+rast_bathy <- var_to_rast(df_biov1 %>% dplyr::select(bin,height) %>% dplyr::mutate(height=-height), ext=c(xlims,ylims))
+rast_biov1 <- var_to_rast(df_biov1 %>% dplyr::select(bin,cppday), ext=c(xlims,ylims))
+
+# get ocean productivity pp
+rast_svgpm <- get_op_pp(file_svgpm,rast_biov1,xlims,ylims)
+
+# get biov2 pp
+load(file_biov2_month_VPI_NU)
+rast_biov2_month_VPI_NU = var_to_rast(rda_output %>% dplyr::select(bin, PP), ext=c(xlims,ylims))
+load(file_biov2_month_MPI_U)
+rast_biov2_month_MPI_U = var_to_rast(rda_output %>% dplyr::select(bin, PP), ext=c(xlims,ylims))
+
+```
+
+
+#### Input variables for BIOv1
+
+```{r, fig.height=4, fig.width=10}
+r1 <- make_raster_map(rast_alphab, title="alphaB_BIOv1")
+r2 <- make_raster_map(rast_pmb, title="PmB_BIOv1")
+r3 <- make_raster_map(rast_chl, title="log10(chl)_BIOv1")
+wrap_plots(list(r1,r2,r3),nrow=1,byrow=TRUE)
+```
+
+<br>
+
+#### Monthly average daily PP: BIOv1 and VGPM
+
+```{r, fig.height=4.5, fig.width=10}
+pp_rasts <- raster::stack(set_lims(rast_biov1, col_limits_pp),
+                          set_lims(rast_svgpm, col_limits_pp))
+names(pp_rasts) <- c("DailyPP_BIOv1",
+                     "DailyPP_Standard_VGPM")
+make_raster_map(pp_rasts, col_limits=col_limits_pp) + theme(plot.margin=unit(c(0,0,0,0),"mm"))
+```
+
+<br>
+
+##### BIOv2 VPI_NU, and % difference from BIOv1 and VGPM
+
+```{r, fig.height=5, fig.width=10}
+p1 <- make_raster_map(set_lims(rast_biov2_month_VPI_NU, col_limits_pp), col_limits=col_limits_pp, title="DailyPP_BIOv2") + theme(plot.margin=unit(c(0,0,0,0),"mm"))
+p2 <- arrange_maps(rast_biov1, xlims, list(rast_biov2_month_VPI_NU), date_bio, col_limits_pdiff, rast_chl, rast_lat, rast_bathy, title="BIOv2-BIOv1 % diff")
+p3 <- arrange_maps(rast_svgpm, xlims, list(rast_biov2_month_VPI_NU), date_bio, col_limits_pdiff, rast_chl, rast_lat, rast_bathy, title="BIOv2-VGPM % diff")
+layout <- "#BC
+           ABC
+           ABC
+           ABC
+           ABC
+           ABC
+           ABC
+           #BC"
+p1 + p2 + p3 + plot_layout(design=layout)
+```
+
+<br>
+
+##### BIOv2 MPI_U, and % difference from BIOv1 and VGPM
+
+```{r, fig.height=5, fig.width=10}
+p1 <- make_raster_map(set_lims(rast_biov2_month_MPI_U, col_limits_pp), col_limits=col_limits_pp, title="DailyPP_BIOv2") + theme(plot.margin=unit(c(0,0,0,0),"mm"))
+p2 <- arrange_maps(rast_biov1, xlims, list(rast_biov2_month_MPI_U), date_bio, col_limits_pdiff, rast_chl, rast_lat, rast_bathy, title="BIOv2-BIOv1 % diff")
+p3 <- arrange_maps(rast_svgpm, xlims, list(rast_biov2_month_MPI_U), date_bio, col_limits_pdiff, rast_chl, rast_lat, rast_bathy, title="BIOv2-VGPM % diff")
+p1 + p2 + p3 + plot_layout(design=layout)
+```
+
+<br>
