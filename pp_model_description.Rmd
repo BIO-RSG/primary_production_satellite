@@ -226,7 +226,7 @@ zenD <- 45
 
 df <- data.frame(Symbol = c("zendR", "lam", "Fo", "oza", "ag", "aw", "nw", "rh",
                             "am", "wv", "wsm", "ws", "vis", "ro3", "p", "p0", "sco3"),
-                 Value = c(NA, rep("Table3",5),
+                 Value = c(NA, rep("(Table4)",5),
                            1.34, 0.8, 1, 1.5, 0, 0, NA, 100, 29.92, 29.92, NA),
                  Units = c("degrees","nm","Watts/m<sup>2</sup>/nm",
                            "1/cm","1/cm","1/cm","","","","cm","m/s","m/s","km",
