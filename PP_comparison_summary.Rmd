@@ -18,15 +18,15 @@ Here, the results are compared to other models (BIOv1 and VGPM), and to itself u
 
 1. Same input as BIOv1 (Fig.1)  
 Comparing BIOv2 to BIOv1 and VGPM, using the same input file as BIOv1:  
-[PP_comparison_01_BIOv2_vs_BIOv1_20211210](PP_comparison_01_BIOv2_vs_BIOv1_20211222.html)  
+[PP_comparison_01_BIOv2_vs_BIOv1_20211222](PP_comparison_01_BIOv2_vs_BIOv1_20211222.html)  
 
 2. New input, monthly composite (Fig.1)  
 Same comparison but using our own input for BIOv2, collected from the panCanadian dataset (daily 4km-resolution binned files) and converted into monthly composites using a simple arithmetic average, and replacing CHL_OCX with CHL_POLY4 (Clay et al, 2019):  
-[PP_comparison_02_BIOv2-monthly_vs_BIOv1-monthly_20211212](PP_comparison_02_BIOv2-monthly_vs_BIOv1-monthly_20211222.html)  
+[PP_comparison_02_BIOv2-monthly_vs_BIOv1-monthly_20211222](PP_comparison_02_BIOv2-monthly_vs_BIOv1-monthly_20211222.html)  
 
 3. New input, monthly/8day/daily composites (Fig.2)  
 Comparing new model using different composite lengths for input (monthly, 8day, or daily):  
-[PP_comparison_03_BIOv2-monthly-8day-daily_20211212](PP_comparison_03_BIOv2-monthly-8day-daily_20211222.html)  
+[PP_comparison_03_BIOv2-monthly-8day-daily_20211222](PP_comparison_03_BIOv2-monthly-8day-daily_20211222.html)  
 
 <br>
 
