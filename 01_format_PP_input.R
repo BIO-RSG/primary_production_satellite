@@ -22,6 +22,7 @@ dformat <- "%Y%m%d"
 #
 # Create standard input for later use in BIO or Laval primary production scripts.
 # NWA REGION ONLY.
+# This removes chl outside the selected range below, along with invalid (NA) values.
 #
 # Output files (stored in ../data/formatted/):
 #       1. sat_data_YYYYMM_formatted_composite_created[created date].csv
@@ -46,16 +47,21 @@ dformat <- "%Y%m%d"
 
 # Vector of date objects
 # These will be converted to their equivalent 8day or monthly days, if those composites are selected.
-d_list <- as_date("20180701",format=dformat):as_date("20180731",format=dformat)
+d_list <- c(as_date("20121001",format=dformat):as_date("20121031",format=dformat),
+            as_date("20150101",format=dformat):as_date("20150131",format=dformat),
+            as_date("20170401",format=dformat):as_date("20170430",format=dformat),
+            as_date("20180701",format=dformat):as_date("20180731",format=dformat))
 
 # Options: daily, 8day or monthly (i.e. get data for weekly PP processing, or monthly?)
-composite <- "8day"
+# DON'T FORGET TO ADJUST PATH TO CHL HERE, AND CHL_FILLED - using gap-filled or not?
+composite <- "daily"
 
 # VIIRS-SNPP or MODIS
 sensor <- "VIIRS-SNPP"
 
 input_path <- "/mnt/data3/claysa"
-chl_path <- file.path(input_path, "VIIRS-SNPPfilled", "CHL_POLY4", "NWA", "8day", "annual_fst")
+# chl_path <- file.path(input_path, "VIIRS-SNPP", "CHL_POLY4", "NWA", "annual_fst")
+chl_path <- file.path(input_path, "VIIRS-SNPPfilled", "CHL_POLY4", "NWA", composite, "annual_fst")
 par_path <- file.path(input_path, "VIIRS-SNPP", "PAR", "PANCAN", "annual_fst")
 sst_path <- file.path(input_path, "VIIRS-SNPP", "SST", "PANCAN", "annual_fst")
 tcc_path <- NULL # set to NULL if it's not needed
@@ -109,13 +115,13 @@ if (composite=="8day") {
 }
 
 # Reference parameters for nonuniform biomass profile
-bp_par <- read.csv("data/02a_LUT_cp-20141117.csv") %>%
+bp_par <- read.csv("data/01a_LUT_cp-20141117.csv") %>%
     mutate(dates=as.Date(paste0(year,"-",mon,"-",day))) %>%
     filter(chlsur>=0,!is.na(chlsur),!is.na(tempsur))#,
            #between(sigma,0,250),between(zm,-100,200),between(rho,0,1))
 
 # Reference parameters for PI curve
-pi_par <- read.csv("data/02a_LUT_pi-20141113.csv") %>%
+pi_par <- read.csv("data/01a_LUT_pi-20141113.csv") %>%
     mutate(dates = as.Date(paste0(year,"-",mon,"-",day)),
            dn = format(as.Date(dates,origin="1970-01-01"),"%j")) %>%
     filter(alpha >= 0, !is.na(pm), !is.na(alpha))#,
@@ -130,6 +136,8 @@ output_name_end <- paste0(composite, "_NWA_", sensor, "_created",Sys.Date())
 
 num_pix <- sapply(num_pix, "[[", 1)
 nwa_bins <- get_bins(region="nwa", variables="bin")
+
+num_cl <- min(parallel::detectCores()-1, num_cl)
 
 
 #*******************************************************************************
@@ -164,8 +172,7 @@ for (i in 1:length(d_list)) {
         dplyr::rename(lon=longitude,
                       lat=latitude,
                       bathy=bathymetry) %>%
-        dplyr::mutate(bathy=abs(bathy)) %>%
-        dplyr::filter(is.finite(chl) & is.finite(sst) & is.finite(par))
+        dplyr::mutate(bathy=abs(bathy))
     
     if (is.null(tcc_path)) {
         sat_vars$tcc <- 0 # ignore tcc, set to clear sky
@@ -177,11 +184,10 @@ for (i in 1:length(d_list)) {
                            paste0(tcc_path, "/", composite, "/MYDAL2_M_CLD_FR_",y,"-",str_pad(m,width=2,side="left",pad="0"),".csv"))
         if (!file.exists(tcc_file)) {next}
         sat_vars <- left_join(x=sat_vars, y=fread(tcc_file), by="bin") %>%
-            dplyr::filter(is.finite(tcc))
+            dplyr::filter(between(tcc, tcc_range[1], tcc_range[2]))
     }
     
-    sat_vars <- sat_vars %>%
-        dplyr::filter(between(tcc, tcc_range[1], tcc_range[2]) & between(chl, chl_range[1], chl_range[2]))
+    sat_vars <- sat_vars %>% dplyr::filter(between(chl, chl_range[1], chl_range[2]))
     
     
     #-------------------------------------------------------------------
@@ -195,37 +201,48 @@ for (i in 1:length(d_list)) {
     
     valid_sst <- sat_vars$sst
     valid_chl <- log(sat_vars$chl)
+    valid_ind <- is.finite(valid_sst) & is.finite(valid_chl)
+    valid_chl <- valid_chl[valid_ind]
+    valid_sst <- valid_sst[valid_ind]
     
     # Biomass profile
-    bp_param <- get_param(logchla=valid_chl,
-                          sst=valid_sst,
-                          month=m,
-                          day=as.numeric(doy),
-                          ref_tab=bp_par,
-                          param_type="bp",
-                          num_cl=min(parallel::detectCores()-1, num_cl))
+    # get_param() finds the 10 nearest neighbours and gets the corresponding biomass parameters,
+    # scaling B0 and h according to surface chla
+    bp_param <- matrix(nrow=nrow(sat_vars), ncol=6)
+    bp_param[valid_ind,c(3,4,1,2,6,5)] <- get_param(logchla=valid_chl,
+                                                    sst=valid_sst,
+                                                    month=m,
+                                                    day=as.numeric(doy),
+                                                    ref_tab=bp_par,
+                                                    param_type="bp",
+                                                    num_cl=num_cl)
+    colnames(bp_param) <- c("zm","B0","h","sigma","B0_unscaled","h_unscaled")
     
     # PI curve
-    pi_param <- get_param(logchla=valid_chl,
-                          sst=valid_sst,
-                          month=m,
-                          day=as.numeric(doy),
-                          ref_tab=pi_par,
-                          param_type="pi",
-                          num_cl=min(parallel::detectCores()-1, num_cl))
+    pi_param <- matrix(nrow=nrow(sat_vars), ncol=2)
+    pi_param[valid_ind,c(2,1)] <- get_param(logchla=valid_chl,
+                                            sst=valid_sst,
+                                            month=m,
+                                            day=as.numeric(doy),
+                                            ref_tab=pi_par,
+                                            param_type="pi",
+                                            num_cl=num_cl)
+    colnames(pi_param) <- c("alphab", "pmb")
     
     
     #-------------------------------------------------------------------
     # FORMAT AND WRITE OUTPUT TO .CSV FILE
     
-    datestr <- ifelse(composite=="monthly", paste0(y, str_pad(m,width=2,side="left",pad="0")), paste0(y, doy))
+    datestr <- ifelse(composite=="monthly",
+                      paste0(y, str_pad(m,width=2,side="left",pad="0")),
+                      paste0(y, str_pad(doy,width=3,side="left",pad="0")))
     
     cat(paste0("Writing output for ", datestr, "...\n"))
     
     # Write satellite variables, biomass profile parameters, and PI curve parameters
     fwrite(sat_vars, file = paste0(output_path, "/", datestr, "_satdata_", output_name_end, ".csv"))
-    fwrite(bp_param[,c(3,4,1,2)], file = paste0(output_path, "/", datestr, "_BPparams_", output_name_end, ".csv"))
-    fwrite(pi_param[,c(2,1)], file = paste0(output_path, "/", datestr, "_PIparams_", output_name_end, ".csv"))
+    fwrite(bp_param, file = paste0(output_path, "/", datestr, "_BPparams_", output_name_end, ".csv"))
+    fwrite(pi_param, file = paste0(output_path, "/", datestr, "_PIparams_", output_name_end, ".csv"))
 
 }
 
