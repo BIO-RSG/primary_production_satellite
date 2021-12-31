@@ -31,15 +31,18 @@ dformat <- "%Y%m%d"
 #*******************************************************************************
 # VARIABLES THAT CAN BE CHANGED
 
-# # Vector of date objects
-# # These will be converted to their equivalent 8day or monthly days, if those composites are selected.
-# d_list <- as_date("20150101",format=dformat):as_date("20150131",format=dformat)
+# Vector of date objects
+# These will be converted to their equivalent 8day or monthly days, if those composites are selected.
+d_list <- as_date("20150101",format=dformat):as_date("20150131",format=dformat)
 
-# # Length of composites used for PP calculation (daily, 8day, or monthly)
-# composite <- "monthly"
+# Length of composites used for PP calculation (daily, 8day, or monthly)
+composite <- "monthly"
 
-# # Chla profile uniform or not?
-# uniform_profile <- TRUE
+# model to use - BIOv2 only (need to do some reformatting before BIOv1 and Laval can be used with this)
+model <- "BIOv2"
+
+# Chla profile uniform or not?
+uniform_profile <- TRUE
 
 # If nonuniform, use Gaussian curve?
 # (Must have properly named and formatted csv files containing parameters, created using format_input.R)
@@ -50,19 +53,19 @@ gauss <- TRUE
 bp <- cbind(seq(1,100,by=10),   # depths (metres)
             rep(1,10))          # chla
 
-# # Use a single value for each PI parameter? (i.e. the same value for every pixel in the image)
-# use_constant_alphab <- TRUE
-# use_constant_pmb <- TRUE
-# 
-# # If using a constant alphab or pmb for the whole region, how should it be calculated?
-# #       OPTIONS: predefined (alphab=1, pmb=1.69), mean, or median
-# #       Note that if the image is subsetted below, the mean or median will be calculated using only the values inside those boundaries
-# alphab_method <- "median"
-# pmb_method <- "median"
+# Use a single value for each PI parameter? (i.e. the same value for every pixel in the image)
+use_constant_alphab <- TRUE
+use_constant_pmb <- TRUE
 
-# # Output filename format = [nc_out]_BIO_NWA_[composite]_[date].nc
-# # [date] = YYYYMM or YYYYDDD for monthly or 8day respectively.
-# nc_out <- "BIOv2_BIOv1-input"
+# If using a constant alphab or pmb for the whole region, how should it be calculated?
+#       OPTIONS: predefined (alphab=1, pmb=1.69), mean, or median
+#       Note that if the image is subsetted below, the mean or median will be calculated using only the values inside those boundaries
+alphab_method <- "median"
+pmb_method <- "median"
+
+# Output filename format = [nc_out]_NWA_[composite]_[date].nc
+# [date] = YYYYMM or YYYYDDD for monthly or 8day respectively.
+nc_out <- "BIOv2_"
 
 # Do a subsetted region (for testing)
 subset <- FALSE
@@ -72,14 +75,15 @@ lon_bounds <- c(-65,-43)
 # for nonuniform gaussian profiles, lowest allowed background chla (B0)
 low_B0 <- 1e-5
 
-# # Number of clusters to use in parallel processing
-# num_cl <- 10 # detectCores()-1, or manually: 10 for hecla, 3 for Windows, 12 for Loki
+# Number of clusters to use in parallel processing
+# (2021-12-29 this is not used, instead we use Rcpp for faster processing)
+num_cl <- 10 # detectCores()-1, or manually: 10 for hecla, 3 for Windows, 12 for Loki
 
-# # Input formatted csv files
-# input_path <- paste0("01_PP_input/", composite, "/")
+# Input formatted csv files
+input_path <- paste0("01_PP_input/", model, "/", composite, "/")
 
-# # Path for output files
-# output_path <- paste0("03_PP_output/", composite, "/")
+# Path for output files
+output_path <- paste0("02_PP_output/", model, "/", composite, "/")
 
 
 
@@ -89,6 +93,10 @@ low_B0 <- 1e-5
 # for writing to output
 data("nwa_bins_4km")
 
+# make sure the output folder exists
+dir.create(output_path, showWarnings=FALSE, recursive=TRUE)
+
+# get a full list of input files
 files <- list.files(input_path)
 
 # convert the selected dates to 8day or monthly, and subset to unique values
@@ -115,32 +123,32 @@ for (i in 1:length(d_list)) {
     
     
     
-    # #*****************************************************************
-    # # LOAD INPUT
-    # 
-    # datestr <- ifelse(composite=="monthly",
-    #                   paste0(y, str_pad(m,width=2,side="left",pad="0")),
-    #                   paste0(y, str_pad(doy,width=3,side="left",pad="0")))
-    # file <- files[grepl(datestr,files)]
-    # file_main <- paste0(input_path, file[which(grepl("satdata", file))])
-    # file_pi <- paste0(input_path, file[which(grepl("PIparams", file))])
-    # if (!file.exists(file_main) | !file.exists(file_pi)) {next}
-    # 
-    # # variables needed for BIO_v2
-    # vars_to_select <- c("lat", "doy", "year", "par", "chl", "alphab", "pmb")
-    # 
-    # # file_main = bin, lon, lat, bathy, chl, sst, par, tcc
-    # # file_pi = alphab and pmb (PI curve parameter)
-    # input <- bind_cols(fread(file_main), fread(file_pi)) %>% as.data.frame()
-    # 
-    # # if non-uniform profile and gaussian curve, add BP parameter columns to input
-    # if (!uniform_profile & gauss) {
-    #     file_bp <- paste0(input_path, file[which(grepl("BPparams", file))])
-    #     if (!file.exists(file_bp)) {next}
-    #     input <- bind_cols(input, fread(file_bp) %>% as.data.frame()) %>% dplyr::mutate(B0 = ifelse(B0 < low_B0, low_B0, B0))
-    #     vars_to_select <- c(vars_to_select, "zm", "B0", "h", "sigma")
-    # }
-    # #*****************************************************************
+    #*****************************************************************
+    # LOAD INPUT
+
+    datestr <- ifelse(composite=="monthly",
+                      paste0(y, str_pad(m,width=2,side="left",pad="0")),
+                      paste0(y, str_pad(doy,width=3,side="left",pad="0")))
+    file <- files[grepl(datestr,files)]
+    file_main <- paste0(input_path, file[which(grepl("satdata", file))])
+    file_pi <- paste0(input_path, file[which(grepl("PIparams", file))])
+    if (!file.exists(file_main) | !file.exists(file_pi)) {next}
+
+    # variables needed for BIO_v2
+    vars_to_select <- c("lat", "doy", "year", "par", "chl", "alphab", "pmb")
+
+    # file_main = bin, lon, lat, bathy, chl, sst, par, tcc
+    # file_pi = alphab and pmb (PI curve parameter)
+    input <- bind_cols(fread(file_main), fread(file_pi)) %>% as.data.frame()
+
+    # if non-uniform profile and gaussian curve, add BP parameter columns to input
+    if (!uniform_profile & gauss) {
+        file_bp <- paste0(input_path, file[which(grepl("BPparams", file))])
+        if (!file.exists(file_bp)) {next}
+        input <- bind_cols(input, fread(file_bp) %>% as.data.frame()) %>% dplyr::mutate(B0 = ifelse(B0 < low_B0, low_B0, B0))
+        vars_to_select <- c(vars_to_select, "zm", "B0", "h", "sigma")
+    }
+    #*****************************************************************
     
     
     
@@ -172,69 +180,69 @@ for (i in 1:length(d_list)) {
     
     
     
-    #*****************************************************************
-    # FOR PP_COMPARISON 02-03
-
-    datestr <- ifelse(composite=="monthly",
-                      paste0(y, str_pad(m,width=2,side="left",pad="0")),
-                      paste0(y, str_pad(doy,width=3,side="left",pad="0")))
-    file <- files[grepl(datestr,files)]
-    file_main <- paste0(input_path, file[which(grepl("satdata", file))])
-    file_pi <- paste0(input_path, file[which(grepl("PIparams", file))])
-    if (!file.exists(file_main) | !file.exists(file_pi)) {next}
-
-    # variables needed for BIO_v2
-    vars_to_select <- c("lat", "doy", "year", "par", "chl", "alphab", "pmb")
-
-    # file_main = bin, lon, lat, bathy, chl, sst, par, tcc
-    # file_pi = alphab and pmb (PI curve parameter)
-    input <- bind_cols(fread(file_main), fread(file_pi)) %>% as.data.frame()
-
-    # if non-uniform profile and gaussian curve, add BP parameter columns to input
-    if (!uniform_profile & gauss) {
-        file_bp <- paste0(input_path, file[which(grepl("BPparams", file))])
-        if (!file.exists(file_bp)) {next}
-        input <- bind_cols(input, fread(file_bp) %>% as.data.frame())
-        vars_to_select <- c(vars_to_select, "zm", "B0", "h", "sigma")
-    }
-
-    # USE PI AND BIOMASS PARAMETERS FROM CARLA'S FILE FOR A MORE DIRECT COMPARISON
-    tmp_biov1 <- bind_cols(fread(paste0(biov1_input_path,biov1_dates[i],"_LHTBI.csv")),
-                           fread(paste0(biov1_input_path,biov1_dates[i],"_pi-20141113.csv")),
-                           fread(paste0(biov1_input_path,biov1_dates[i],"_cp-20141117.csv")),
-                           fread(paste0(biov1_input_path,biov1_dates[i],"_pp_fs.csv"))) %>%
-        dplyr::rename(bin=Name)
-    if (uniform_profile) {
-        tmp_biov1 <- dplyr::left_join(input %>% dplyr::select(-alphab,-pmb), tmp_biov1, by="bin")
-    } else {
-        tmp_biov1 <- dplyr::left_join(input %>% dplyr::select(-alphab,-pmb,-zm,-B0,-h,-sigma), tmp_biov1, by="bin")
-    }
-    input$alphab <- tmp_biov1$alphaB
-    input$pmb <- tmp_biov1$PmB
-    if (!uniform_profile) {
-        # take the unscaled h and B0, and scale them according to the chl you use in the new file (CHL_POLY4 probably)
-        h <- tmp_biov1$h
-        B0 <- tmp_biov1$B0
-        sigma <- tmp_biov1$sigma
-        zm <- tmp_biov1$zm
-        rho <- tmp_biov1$rho
-        cp_sum <- h/rho/sigma/sqrt(2*pi)
-        chl_scl <- input$chl/(cp_sum*((1-rho) + rho*exp(-.5*(zm/sigma)^2)))
-        # add the scaled parameters and other parameters zm and sigma to the input file
-        input$h <- chl_scl * h
-        input$B0 <- chl_scl * cp_sum * (1 - rho)
-        input$zm <- zm
-        input$sigma <- sigma
-        # set B0 to boundary
-        input <- input %>% dplyr::mutate(B0 = ifelse(B0 < low_B0, low_B0, B0))
-        
-        # WARNING: this is scaling by CHL_POLY4, but using parameters retrieved 
-        # from the lookup table with CHL_OCX
-    }
-
-    # Carla's input files have erroneous data marked as -9000,-9001,-9002...
-    input[input < -500] <- NA
-    #*****************************************************************
+    # #*****************************************************************
+    # # FOR PP_COMPARISON 02-03
+    # 
+    # datestr <- ifelse(composite=="monthly",
+    #                   paste0(y, str_pad(m,width=2,side="left",pad="0")),
+    #                   paste0(y, str_pad(doy,width=3,side="left",pad="0")))
+    # file <- files[grepl(datestr,files)]
+    # file_main <- paste0(input_path, file[which(grepl("satdata", file))])
+    # file_pi <- paste0(input_path, file[which(grepl("PIparams", file))])
+    # if (!file.exists(file_main) | !file.exists(file_pi)) {next}
+    # 
+    # # variables needed for BIO_v2
+    # vars_to_select <- c("lat", "doy", "year", "par", "chl", "alphab", "pmb")
+    # 
+    # # file_main = bin, lon, lat, bathy, chl, sst, par, tcc
+    # # file_pi = alphab and pmb (PI curve parameter)
+    # input <- bind_cols(fread(file_main), fread(file_pi)) %>% as.data.frame()
+    # 
+    # # if non-uniform profile and gaussian curve, add BP parameter columns to input
+    # if (!uniform_profile & gauss) {
+    #     file_bp <- paste0(input_path, file[which(grepl("BPparams", file))])
+    #     if (!file.exists(file_bp)) {next}
+    #     input <- bind_cols(input, fread(file_bp) %>% as.data.frame())
+    #     vars_to_select <- c(vars_to_select, "zm", "B0", "h", "sigma")
+    # }
+    # 
+    # # USE PI AND BIOMASS PARAMETERS FROM CARLA'S FILE FOR A MORE DIRECT COMPARISON
+    # tmp_biov1 <- bind_cols(fread(paste0(biov1_input_path,biov1_dates[i],"_LHTBI.csv")),
+    #                        fread(paste0(biov1_input_path,biov1_dates[i],"_pi-20141113.csv")),
+    #                        fread(paste0(biov1_input_path,biov1_dates[i],"_cp-20141117.csv")),
+    #                        fread(paste0(biov1_input_path,biov1_dates[i],"_pp_fs.csv"))) %>%
+    #     dplyr::rename(bin=Name)
+    # if (uniform_profile) {
+    #     tmp_biov1 <- dplyr::left_join(input %>% dplyr::select(-alphab,-pmb), tmp_biov1, by="bin")
+    # } else {
+    #     tmp_biov1 <- dplyr::left_join(input %>% dplyr::select(-alphab,-pmb,-zm,-B0,-h,-sigma), tmp_biov1, by="bin")
+    # }
+    # input$alphab <- tmp_biov1$alphaB
+    # input$pmb <- tmp_biov1$PmB
+    # if (!uniform_profile) {
+    #     # take the unscaled h and B0, and scale them according to the chl you use in the new file (CHL_POLY4 probably)
+    #     h <- tmp_biov1$h
+    #     B0 <- tmp_biov1$B0
+    #     sigma <- tmp_biov1$sigma
+    #     zm <- tmp_biov1$zm
+    #     rho <- tmp_biov1$rho
+    #     cp_sum <- h/rho/sigma/sqrt(2*pi)
+    #     chl_scl <- input$chl/(cp_sum*((1-rho) + rho*exp(-.5*(zm/sigma)^2)))
+    #     # add the scaled parameters and other parameters zm and sigma to the input file
+    #     input$h <- chl_scl * h
+    #     input$B0 <- chl_scl * cp_sum * (1 - rho)
+    #     input$zm <- zm
+    #     input$sigma <- sigma
+    #     # set B0 to boundary
+    #     input <- input %>% dplyr::mutate(B0 = ifelse(B0 < low_B0, low_B0, B0))
+    #     
+    #     # WARNING: this is scaling by CHL_POLY4, but using parameters retrieved 
+    #     # from the lookup table with CHL_OCX
+    # }
+    # 
+    # # Carla's input files have erroneous data marked as -9000,-9001,-9002...
+    # input[input < -500] <- NA
+    # #*****************************************************************
     
     
     
@@ -299,7 +307,7 @@ for (i in 1:length(d_list)) {
     #*******************************************************************
     # WRITE OUTPUT TO RDA AND NETCDF
     
-    output_name <- paste0(output_path, nc_out, "_BIO_NWA_", composite, "_", datestr)
+    output_name <- paste0(output_path, nc_out, "_NWA_", composite, "_", datestr)
     if (subset) {
         output_name <- paste0(output_name, "_", paste0(lat_bounds,collapse="-"),"N_", paste0(sort(abs(lon_bounds)),collapse="-"),"W")
     }

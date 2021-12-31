@@ -28,7 +28,7 @@ interval <- "8day" # 8day or monthly
 
 download_folder <- paste0("01a_downloaded_TCC/", interval, "/")
 
-# Base url (without the final forward slash)
+# Base url (with the final forward slash)
 baseurl="https://neo.sci.gsfc.nasa.gov/archive/gs/"
 
 # Make a vector of months and days at 8-day intervals for weekly images to extract month-day
@@ -51,5 +51,5 @@ for (y in years) {
         }
     }
     gettcc_fname <- paste0(download_folder,y,"_get_tcc.txt")
-    lapply(filename_list, write, gettcc_fname, append=T, ncolumns=1)
+    lapply(filename_list, write, gettcc_fname, append=TRUE, ncolumns=1)
 }

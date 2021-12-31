@@ -246,14 +246,14 @@ get_param <- function(logchla, sst, month, day, ref_tab, param_type, num_cl) {
         B0 <- best_param[,4]
 
         insitu_surface_chla <- B0 + (h/(sigma*sqrt(2*pi))) * exp(-0.5*((zm/sigma)^2))
-
         chla <- exp(logchla)
-        newc <- chla/insitu_surface_chla
+        param_scalar <- chla/insitu_surface_chla
+        
+        best_param <- cbind(best_param, best_param[,c(1,4)])
+        colnames(best_param) <- c("h", "sigma", "zm", "B0", "h_unscaled", "B0_unscaled")
 
-        best_param[,4] <- best_param[,4] * newc
-        best_param[,1] <- best_param[,1] * newc
-        B0 <- newc * B0
-        h <- newc * h
+        best_param[,1] <- best_param[,1] * param_scalar
+        best_param[,4] <- best_param[,4] * param_scalar
 
     }
     

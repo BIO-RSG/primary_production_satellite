@@ -49,8 +49,7 @@ for (i in 1:length(dates)) {
     # Load TCC file
     tcc <- raster(readPNG(paste0(input_path,input_file)))
     
-    # Match projection and extent from bins raster to TCC raster
-    crs(tcc) <- crs(bins.rl)
+    # Match extent from bins raster to TCC raster
     extent(tcc) <- extent(bins.rl)
     
     # Resample to match the size of the sst, chl, and par grids, using the nearest neighbour method (ngb)
