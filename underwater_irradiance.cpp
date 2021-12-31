@@ -128,6 +128,7 @@ NumericMatrix underwater_irradiance_NU_c(NumericMatrix E0dir, NumericMatrix E0di
 
         BC = BC660*pow((660/lambda),(-log10(chlz))); // BC spectral dependence depends on chlz,
         // this means that at chl = 1 tere is no spectral dependence.This is weird and has to be checked
+        // also if chlz = 0 this will give an error
         BC[BC < 0] = 0;
         bbt = BC*bbtilda + BW*0.5; // Here, we get total backscattering.
 
@@ -149,20 +150,22 @@ NumericMatrix underwater_irradiance_NU_c(NumericMatrix E0dir, NumericMatrix E0di
 
         if (iz==1) {
             for (int it=hr1; it <= hr2; it++) {
-                // PIz = 1/cos(zendw[it]) * sum(alphaBc * E0dir(it, _)) + 1.20 * sum(alphaBc * E0dif(it, _));
+                // calculate PP for surface irradiance
                 PIz = sum(alphaBc * (E0dir(it, _) + E0dif(it, _)));
                 PP(it, 0) = chlz * PIz/sqrt(1 + pow((PIz/PBm),2));
+                // calculate attenuated light for second depth
                 tmp_E0dir(it, _) = E0dir(it, _) * exp(E0dir_num / cos(zendw[it]));
                 tmp_E0dif(it, _) = E0dif(it, _) * Kddif;
-                // PIz = 1/cos(zendw[it]) * sum(alphaBc * tmp_E0dir(it, _)) + 1.20 * sum(alphaBc * tmp_E0dif(it, _));
+                // calculate PP for second depth
                 PIz = sum(alphaBc * (tmp_E0dir(it, _) + tmp_E0dif(it, _)));
                 PP(it, 1) = chlz * PIz/sqrt(1 + pow((PIz/PBm),2));
             }
         } else {
             for (int it=hr1; it <= hr2; it++) {
+                // calculate attenuated light for this depth
                 tmp_E0dir(it, _) = tmp_E0dir(it, _) * exp(E0dir_num / cos(zendw[it]));
                 tmp_E0dif(it, _) = tmp_E0dif(it, _) * Kddif;
-                // PIz = 1/cos(zendw[it]) * sum(alphaBc * tmp_E0dir(it, _)) + 1.20 * sum(alphaBc * tmp_E0dif(it, _));
+                // calculate PP for this depth
                 PIz = sum(alphaBc * (tmp_E0dir(it, _) + tmp_E0dif(it, _)));
                 PP(it, iz) = chlz * PIz/sqrt(1 + pow((PIz/PBm),2));
             }
