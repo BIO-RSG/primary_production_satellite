@@ -2,3 +2,11 @@
 .Rhistory
 .RData
 .Ruserdata
+01_PP_input/daily/*
+01_PP_input/8day/*
+02_PP_output/BIOv2/daily/*
+02_PP_output/BIOv2/8day/*
+02_PP_output/BIOv1/daily/*
+02_PP_output/BIOv1/8day/*
+02_PP_output/Laval/daily/*
+02_PP_output/Laval/8day/*
