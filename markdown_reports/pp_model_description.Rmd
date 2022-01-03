@@ -383,7 +383,7 @@ chl_sat = scalar * B(0)
 where *B0_sc* and *h_sc* are scaled versions of *B0* and *h*, respectively (*B0* controls the concentration of chla in the background, *h* controls the height of the curve).  
 
 `B0_sc = scalar * B0`  
-`h = scalar * h`  
+`h_sc = scalar * h`  
 
 *B0_sc* is set to a minimum of *1e-5* to avoid errors in the water profile code when calculating log10(chl).  
 
