@@ -98,7 +98,7 @@ for (i in 1:length(zeniths)) {
 
 
 # # DOING DIFFUSE, DIRECT, AND TOTAL IRRADIANCE
-#
+# 
 # test = irrad_df %>%
 #     dplyr::mutate(Sun_altitude = -Solar_zenith_angle + 90) %>%
 #     tidyr::pivot_longer(Direct:Total, names_to="Type", values_to="Irradiance")

@@ -48,10 +48,15 @@ uniform_profile <- TRUE
 # (Must have properly named and formatted csv files containing parameters, created using format_input.R)
 gauss <- TRUE
 
-# If nonuniform and not Gaussian, use this input matrix (values can be changed).
-# Values in between these depths will be interpolated.
-bp <- cbind(seq(1,100,by=10),   # depths (metres)
-            rep(1,10))          # chla
+
+
+# Chla profile type in water column
+# Options:
+#       1. uniform (will use surface chla value)
+#       2. gaussian (requires gaussian parameters in input table)
+#       3. interpolated (requires table and chla and depth for basis of linear interpolation)
+profile_type <- "interpolated"
+
 
 # Use a single value for each PI parameter? (i.e. the same value for every pixel in the image)
 use_constant_alphab <- TRUE
@@ -126,6 +131,11 @@ for (i in 1:length(d_list)) {
     #*****************************************************************
     # LOAD INPUT
 
+    
+    
+    
+    #*****************************************************************
+    # OPTION 1: USE NEW FORMATTED FILES
     datestr <- ifelse(composite=="monthly",
                       paste0(y, str_pad(m,width=2,side="left",pad="0")),
                       paste0(y, str_pad(doy,width=3,side="left",pad="0")))
@@ -151,12 +161,8 @@ for (i in 1:length(d_list)) {
     #*****************************************************************
     
     
-    
-    
-    
     # #*******************************************************************
-    # # FOR PP COMPARISON 01
-    # 
+    # # OPTION 2: USE CARLA'S FORMATTED FILES FOR COMPARISON
     # datestr <- biov1_dates[i]
     # 
     # # temporary reading/formatting for Carla's files
@@ -176,77 +182,6 @@ for (i in 1:length(d_list)) {
     # # Carla's input files have erroneous data marked as -9000,-9001,-9002...
     # input[input < -500] <- NA
     # #*******************************************************************
-    
-    
-    
-    
-    # #*****************************************************************
-    # # FOR PP_COMPARISON 02-03
-    # 
-    # datestr <- ifelse(composite=="monthly",
-    #                   paste0(y, str_pad(m,width=2,side="left",pad="0")),
-    #                   paste0(y, str_pad(doy,width=3,side="left",pad="0")))
-    # file <- files[grepl(datestr,files)]
-    # file_main <- paste0(input_path, file[which(grepl("satdata", file))])
-    # file_pi <- paste0(input_path, file[which(grepl("PIparams", file))])
-    # if (!file.exists(file_main) | !file.exists(file_pi)) {next}
-    # 
-    # # variables needed for BIO_v2
-    # vars_to_select <- c("lat", "doy", "year", "par", "chl", "alphab", "pmb")
-    # 
-    # # file_main = bin, lon, lat, bathy, chl, sst, par, tcc
-    # # file_pi = alphab and pmb (PI curve parameter)
-    # input <- bind_cols(fread(file_main), fread(file_pi)) %>% as.data.frame()
-    # 
-    # # if non-uniform profile and gaussian curve, add BP parameter columns to input
-    # if (!uniform_profile & gauss) {
-    #     file_bp <- paste0(input_path, file[which(grepl("BPparams", file))])
-    #     if (!file.exists(file_bp)) {next}
-    #     input <- bind_cols(input, fread(file_bp) %>% as.data.frame())
-    #     vars_to_select <- c(vars_to_select, "zm", "B0", "h", "sigma")
-    # }
-    # 
-    # # USE PI AND BIOMASS PARAMETERS FROM CARLA'S FILE FOR A MORE DIRECT COMPARISON
-    # tmp_biov1 <- bind_cols(fread(paste0(biov1_input_path,biov1_dates[i],"_LHTBI.csv")),
-    #                        fread(paste0(biov1_input_path,biov1_dates[i],"_pi-20141113.csv")),
-    #                        fread(paste0(biov1_input_path,biov1_dates[i],"_cp-20141117.csv")),
-    #                        fread(paste0(biov1_input_path,biov1_dates[i],"_pp_fs.csv"))) %>%
-    #     dplyr::rename(bin=Name)
-    # if (uniform_profile) {
-    #     tmp_biov1 <- dplyr::left_join(input %>% dplyr::select(-alphab,-pmb), tmp_biov1, by="bin")
-    # } else {
-    #     tmp_biov1 <- dplyr::left_join(input %>% dplyr::select(-alphab,-pmb,-zm,-B0,-h,-sigma), tmp_biov1, by="bin")
-    # }
-    # input$alphab <- tmp_biov1$alphaB
-    # input$pmb <- tmp_biov1$PmB
-    # if (!uniform_profile) {
-    #     # take the unscaled h and B0, and scale them according to the chl you use in the new file (CHL_POLY4 probably)
-    #     h <- tmp_biov1$h
-    #     B0 <- tmp_biov1$B0
-    #     sigma <- tmp_biov1$sigma
-    #     zm <- tmp_biov1$zm
-    #     rho <- tmp_biov1$rho
-    #     cp_sum <- h/rho/sigma/sqrt(2*pi)
-    #     chl_scl <- input$chl/(cp_sum*((1-rho) + rho*exp(-.5*(zm/sigma)^2)))
-    #     # add the scaled parameters and other parameters zm and sigma to the input file
-    #     input$h <- chl_scl * h
-    #     input$B0 <- chl_scl * cp_sum * (1 - rho)
-    #     input$zm <- zm
-    #     input$sigma <- sigma
-    #     # set B0 to boundary
-    #     input <- input %>% dplyr::mutate(B0 = ifelse(B0 < low_B0, low_B0, B0))
-    #     
-    #     # WARNING: this is scaling by CHL_POLY4, but using parameters retrieved 
-    #     # from the lookup table with CHL_OCX
-    # }
-    # 
-    # # Carla's input files have erroneous data marked as -9000,-9001,-9002...
-    # input[input < -500] <- NA
-    # #*****************************************************************
-    
-    
-    
-    
     
     
     
@@ -284,7 +219,7 @@ for (i in 1:length(d_list)) {
     input <- input[valid_inds,]
     input_subset <- input_subset[valid_inds,]
     
-    
+    stop()
     
     #*******************************************************************
     # CALCULATE PP FOR EACH VALID INDEX

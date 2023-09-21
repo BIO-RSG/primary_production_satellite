@@ -1,4 +1,5 @@
 #include <RcppArmadillo.h>
+#include <cmath>
 //[[Rcpp::depends(RcppArmadillo)]]
 using namespace std;
 using namespace Rcpp;
@@ -11,8 +12,8 @@ double comp_sco3_c(double ylat,double xlon,int jday,double ro3) {
     // xlon = longitude (decimal degrees)
     // jday = day of year
     // ro3 = ozone (Dobson Units)
-    double rlat = ylat*PI/180;
-    double rlon = xlon*PI/180;
+    double rlat = ylat*M_PI/180;
+    double rlon = xlon*M_PI/180;
     double to3;
     if (ro3 > 0) {
         to3 = ro3;
@@ -31,7 +32,7 @@ NumericVector solar_irr_c(NumericVector Fobar, int jday) {
     // Fobar = extraterrestrial solar irradiance, Watt/m2/nm
     // jday = day of year
     if(jday >365) {jday=365.0;} // modify date if it is last day of a leap year
-    NumericVector Fo = Fobar * pow((1.0+0.0167*cos(2*PI*(jday-3)/365.0)),2);
+    NumericVector Fo = Fobar * pow((1.0+0.0167*cos(2*M_PI*(jday-3)/365.0)),2);
     return(Fo);
 }
 
@@ -59,7 +60,7 @@ List sfcrfl_c(double theta, double ws) {
     double tanp;
     double a;
     double b;
-
+    
     //  Foam and diffuse reflectance
     if (ws > 4.0) {
         if (ws < 7.0) {
@@ -72,14 +73,14 @@ List sfcrfl_c(double theta, double ws) {
         rof = 0.0;
         rosps = 0.066;
     }
-
+    
     //  Direct
     //  Fresnel reflectance for theta < 40, ws < 2 m/s
     if (theta < 40.0 || ws < 2.0) {
         if (theta == 0.0) {
             rospd = 0.0211;
         } else {
-            rtheta = theta*PI/180;
+            rtheta = theta*M_PI/180;
             rthetar = asin(sin(rtheta)/rn);
             rmin = rtheta - rthetar;
             rpls = rtheta + rthetar;
@@ -92,7 +93,7 @@ List sfcrfl_c(double theta, double ws) {
         b = -7.14E-4*ws + 0.0618;
         rospd = a*exp(b*(theta-40.0));
     }
-
+    
     //  Reflectance totals
     double rodaux = rospd + rof;
     double rosaux = rosps + rof;
@@ -123,12 +124,12 @@ List navaer_c(double rh,double am,double wsm,double ws,double vis) {
     //  Relative humidity factor
     if (rh >= 100.0) rh = 99.9;
     double frh = pow(((2.0 - rh/100.0)/(6.0*(1.0-rh/100.0))),0.333);
-
+    
     //  Size distribution amplitude components
     NumericVector a = {2000.0*am*am,5.866*(wsm-2.2),0.01527*(ws-2.2)*0.05};
     if (a[1] < 0.5) a[1] = 0.5;
     if (a[2] < 1.4E-5) a[2] = 1.4E-5;
-
+    
     //  Compute size distribution at three selected radii according to Navy method
     NumericVector dndr(3);
     for (int i=0; i < 3; i++) {
@@ -138,10 +139,10 @@ List navaer_c(double rh,double am,double wsm,double ws,double vis) {
     //  Least squares approximation
     double gama = (sum(log10(r)*log10(dndr)))/(sum(pow(log10(r),2))); // Junge exponent
     double alphaux = -(gama+3.0); // Angstrom exponent
-
+    
     //  Compute beta
     double betaux = (3.91/vis)*pow(rlam,alphaux);
-
+    
     //  Compute asymmetry parameter -- a function of alpha
     double asympaux;
     if (alphaux > 1.2) {
@@ -161,7 +162,7 @@ List navaer_c(double rh,double am,double wsm,double ws,double vis) {
     Output["asymp"] = asympaux;
     Output["wa"] = waux;
     return(Output);
-
+    
 }
 
 
@@ -194,11 +195,11 @@ List atmodd_v2_c(double rod, double ros, NumericVector lam, double theta,
     
     //  Compute atmospheric path lengths (air mass); pressure-corrected
     //  Modified March, 1994 according to Kasten and Young 1989.
-    double cosunz = cos(theta*PI/180);
+    double cosunz = cos(theta*M_PI/180);
     double rm = 1.0/(cosunz+0.50572*pow((96.07995-theta),-1.6364));
     double rmp = p/p0*rm; // M'theta in Gregg-Carder 1990
     double rmo = (1.0+22.0/6370.0)/pow((cosunz*cosunz+44.0/6370.0),0.5); // Moz in Gregg-Carder 1990
-
+    
     //  Obtain aerosol parameters; simplified Navy aerosol model
     List res_aer = navaer_c(rh,am,wsm,ws,vis);
     double alpha = res_aer["alpha"];
@@ -212,7 +213,7 @@ List atmodd_v2_c(double rod, double ros, NumericVector lam, double theta,
     double afs = alg*(1.459+alg*(.1595+alg*.4129));
     double bfs = alg*(.0783+alg*(-.3824-alg*.5874));
     double Fa = 1.0 - 0.5*exp((afs+bfs*cosunz)*cosunz);
-
+    
     // Compute spectral irradiance
     // Rayleigh, by Bird's method (note: lambda must be in units of nanometres,
     // and then it's converted to microns below)
@@ -230,10 +231,10 @@ List atmodd_v2_c(double rod, double ros, NumericVector lam, double theta,
     NumericVector gtra = exp((-1.41*ag*rmp)/(pow((1.0 + 118.3*ag*rmp),0.45)));
     //   Water Vapor
     NumericVector wtra = exp((-0.2385*aw*wv*rm)/(pow((1.0+20.07*aw*wv*rm),0.45)));
-
+    
     //  Direct irradiance (multiplied by cos(SOLZ) so it's planar, not scalar)
     NumericVector Ediraux = Fo*cosunz*rtra*otra*atra*gtra*wtra*(1.0-rod);
-
+    
     //   Diffuse irradiance (planar)
     NumericVector dray = Fo*cosunz*gtra*wtra*otra*taa*0.5*(1.0-pow(rtra,.95));
     NumericVector daer = Fo*cosunz*gtra*wtra*otra*pow(rtra,1.5)*taa*Fa*(1.0-tas);
@@ -247,7 +248,7 @@ List atmodd_v2_c(double rod, double ros, NumericVector lam, double theta,
     Output["Edif"] = Edifaux;
     Output["Ed"] = Edaux;
     return(Output);
-
+    
 }
 
 
@@ -274,14 +275,16 @@ List surface_irr_c(NumericVector zendR, NumericVector lam,
     // pxlvis = visibility (km)
     // Fo = extraterrestrial irradiance (Watt/m2/nm)
     
+    double tsize = zendR.size();
+    
     // Ed(0+,lambda)
-    NumericMatrix Ed(23,301);
-    NumericMatrix Eddir(23,301);
-    NumericMatrix Eddif(23,301);
+    NumericMatrix Ed(tsize,301);
+    NumericMatrix Eddir(tsize,301);
+    NumericMatrix Eddif(tsize,301);
     
     // Eq(0-)
-    NumericMatrix Eqdirw(23,301); // direct
-    NumericMatrix Eqdifw(23,301); // diffus
+    NumericMatrix Eqdirw(tsize,301); // direct
+    NumericMatrix Eqdifw(tsize,301); // diffus
     
     List irr_gc;
     List irrm_gc;
@@ -289,13 +292,13 @@ List surface_irr_c(NumericVector zendR, NumericVector lam,
     double rod;
     double ros;
     
-    NumericVector Eqdirw_res(23);
-    NumericVector Eqdifw_res(23);
+    NumericVector Eqdirw_res(tsize);
+    NumericVector Eqdifw_res(tsize);
     NumericVector Ed_res(301);
     NumericVector Eddir_res(301);
     NumericVector Eddif_res(301);
     
-    for (int i=0; i < 23; i++) {
+    for (int i=0; i < tsize; i++) {
         
         if (zendR[i] < 90.) {
             
@@ -321,7 +324,7 @@ List surface_irr_c(NumericVector zendR, NumericVector lam,
             Eqdirw(i, _) = Eqdirw_res;
             Eqdifw_res = irrm_gc["Edif"];
             Eqdifw(i, _) = Eqdifw_res;
-
+            
         }
     }
     

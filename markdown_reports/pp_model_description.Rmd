@@ -16,7 +16,7 @@ library(patchwork)
 library(dplyr)
 library(DT)
 library(DiagrammeR)
-source("../R/Gcmod.r")
+source("../scripts/Gcmod.r")
 ```
 
 ***
@@ -112,8 +112,8 @@ DiagrammeR::grViz("
 df <- data.frame(Name = c("alphaB", "PmB"),
                  Description = c("Initial slope of the PI-curve",
                                  "Assimilation number (maximum photosynthetic rate)"),
-                 Units = c("mg C/ mg chl / hr",
-                           "C / chl / hr / Watt / m<sup>2</sup>"))
+                 Units = c("C / chl / hr / (Watt / m<sup>2</sup>)",
+                           "C / chl / hr"))
 DT::datatable(df,
               rownames=FALSE,
               escape=FALSE,

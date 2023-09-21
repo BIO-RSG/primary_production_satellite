@@ -13,7 +13,7 @@ Note that some model functions have been converted to C++ for the sake of speed,
 
 ### CHL, PAR
 
-**These are stored in the PanCanadian dataset (located on _hecla_ as of 2020-11-20). If you don't have access to this, you can download them using the following steps:**  
+**These are stored in the PanCanadian dataset (located on _sinumkw_ as of 2023-08-23). If you don't have access to this, you can download them using the following steps:**  
 
 - Download daily level-3 (L3) binned VIIRS-SNPP files from the [NASA ocean colour website](https://oceandata.sci.gsfc.nasa.gov/) (*note: you must download daily instead of 8day files for consistency with the formatting script*):  
 This can be done using the *01a_download_daily_L3b.sh* from the [panCan_processing repo](https://github.com/BIO-RSG/panCan_processing). **Note** that you need an Earthdata account to download the files (see top of *01a_download_daily_L3b.sh* script for instructions).  
@@ -58,53 +58,30 @@ How to download:
 
 ## INSTRUCTIONS
 
-### STEP 00: Gather raw input data
+1. Gather raw input data from your selected sources, for whatever spatial and temporal resolution    
 
-Using the instructions in the data source section above, gather the necessary input.  
+2. Combine input into the required format, an .Rdata file containing the following columns:  
 
-### STEP 01: Format input
+    - **event_id**
+    - **sample_id**
+    - **station**
+    - **latitude**
+    - **longitude**
+    - **doy** (day of year)
+    - **year**
+    - **par** (surface PAR, currently we use the satellite value)
+    - **depth_data** (a list-col where each cell/element is a dataframe containing columns depth, alphab, pmb, chl)  
+    - **time_data** (a list-col where each cell/element is a vector containing one column ("time"), the time(s) of day to calculate pp, **in UTC** in the format **HHMM**)
 
-Collect and format input data by editing the variables in __01_format_PP_input.R__ and running it. This merges the input data for each variable, with their bin numbers, latitudes, longitudes, and bathymetry. CHL, SST, and time of year are used as input to the function in __01b_get_param.R__, which retrieves corresponding BP (biomass profile) and PI (photosynthesis-irradiance) curve parameters, based on the look-up tables in *01a_LUT_cp-20141117.csv* and *01a_LUT_pi-20141113.csv*. All the data is then combined into a format that can be used as input to the primary production scripts, pixels with missing input data are removed, and the table is written to csv.  
+* For BIOv1, PI parameters and biomass profile parameters for satellite PP were retrieved using the lookup tables in *01a_LUT_cp-20141117.csv* and *01a_LUT_pi-20141113.csv*, based on satellite SST and Chl-a. The function to gather the data can be found in `scripts/get_pi_bp_from_LUT.R`.  
 
+3. Calculate PP using the "01_run" scripts - either satellite PP (surface only) or in situ PP (a matrix of PP for the selected times and depths for each record)  
 
-### STEP 02: Calculate PP
+### OUTPUT
 
-Edit the variables in __02_run_PP.R__ and run them to create primary production files using the selected model, which will be written to the `03_PP_output/model/interval` subfolder, where *model* is either *BIOv1*, *BIOv2*, or *Laval*, and *interval* is either *daily*, *8day* or *monthly*. This "run" script take the user input and reads and organizes the formatted csv input, then calls the main function for the selected model. Two output files are created:  
+1. Rdata file: This contains the full results with PP for each time/depth for each record  
 
-- **NetCDF (.nc)**: This contains only one variable, the primary production in 4km-resolution, in the same size as the NWA (Northwest Atlantic) binned grid so that the values can be easily matched to NWA bin numbers.  
-
-- **Rdata (.rda)**: This contains the input data, primary production, and other variables outputted by the model function (for example, surface PAR).  
-
-
-### STEP 03: Examine output
-
-You can compare the output to the other models or, for example, the [VGPM](http://orca.science.oregonstate.edu/2160.by.4320.8day.hdf.vgpm.v.chl.v.sst.php) model. Output netCDFs can be read like so:  
-
-```
-PP_filename <- "YOUR_PP_FILE.nc"
-library(ncdf4)
-library(raster)
-library(oceancolouR)
-nc <- nc_open(PP_filename)
-PP <- ncvar_get(nc, "PP")
-nc_close(nc)
-data("nwa_bins_4km")
-PP_rast <- var_to_rast(data.frame(bin=nwa_bins_4km, PP=PP, stringsAsFactors=FALSE), ext=c(-95,-42,39,82))
-make_raster_map(PP_rast)
-```
-
-Or you can view the output in the `rda` file, which contains the input variables as well:  
-
-```
-load(PP_filename)
-head(rda_output)
-
-# view a map of PAR input for this primary production
-library(tidyr)
-par_df <- rda_output %>% dplyr::select(bin, par)
-par_rast <- var_to_rast(df=par_df, ext=c(-95,-42,39,82))
-make_raster_map(par_rast)
-```
+2. csv file: This contains a simplified table with a single PP value per record, integrated over time and depth  
 
 
 

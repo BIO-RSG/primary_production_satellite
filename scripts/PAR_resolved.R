@@ -2,15 +2,16 @@
 #*******************************************************************************
 # Load libraries, custom source code, and define variables
 
-library(insol)
 library(lubridate)
 library(oce)
 library(stringr)
 library(fields)
-source("R/convert_units.R")
+source("scripts/convert_units.R")
+source("scripts/insol.R")
+# source("surface_irradiance.R")
 
 # Gcmod.r is the Gregg and Carder model, that is used to retrieve the spectral
-# irradiance just under the sea surface: E_d(0-, lambda) in Einstiein.m-2
+# irradiance just under the sea surface: E_d(0-, lambda) in Einstein.m-2
 # We first use the visibility (in km) as a parameter to scale above-water Satellite
 # PAR to the above-water modeled PAR, once the visibility is found, we derive E_d(0-,lambda)
 # source("R/Gcmod.r")
@@ -61,13 +62,18 @@ nw = 1.34 # refractive index of seawater
 #*******************************************************************************
 # FUNCTION
 
-PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
+# THIS RETURNS UNDERWATER DIRECT AND DIFFUSE COMPONENTS OF RADIANCE IN SCALAR FORM (not planar)
+PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR, datepxl) {
     
-    # compute sun angle for day
+    datepxl <- as.POSIXlt(datepxl)
+    
+    # get hourly datetime objects - need hourly/daily PAR to scale to satellite PAR
     xhr = 1:23
-    datepxl = doyday(yearpxl,daypxl) + hours(xhr)
-    julianpxl = JD(doyday(yearpxl,daypxl))
-    tz(datepxl) <- "UTC" # Here using timezone UTC
+    datepxl_day = doyday(yearpxl,daypxl) + hours(xhr)
+    tz(datepxl_day) <- "UTC" # Here using timezone UTC
+    
+    # combine them with your selected datetime object
+    datepxls <- sort(unique(c(datepxl_day,datepxl)))
     
     # Here we convert PAR from Einstein.m-2.d-1 (scalar) to mW.cm-2.um-1 (planar)
     # see seawifs tech report vol 22 page 49 
@@ -75,7 +81,7 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
     SatPAR = SatPAR/1.193 
     
     # Here we compute the sun zenith angle in degree, which is 90 - elevation
-    zendR = 90 - oce::sunAngle(datepxl,longitude = 0, latitude = latipxl)$altitude
+    zendR = 90 - oce::sunAngle(datepxls,longitude = 0, latitude = latipxl)$altitude
     zendw = asin( 1/nw * sin(zendR * pi/180))
     
     # We compute the ozone content, it can be derived from climatology or use a real time value
@@ -85,7 +91,7 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
     # Find the visibility *pixvil that corresponds to  SatPAR for latitude and day of year:
     latidx_match = seq(35.0, 80.0, 0.25) # lats of the PARday file, from 35 to 80 in 0.25 degree increments
     if (length(latidx_match) != nrow(PARday)) {
-        print("Error with PARday file and line 92")
+        print("Error with PARday file")
         break
     } else if (latipxl > 80 | latipxl < 35) {
         return(list(Eqdifw=rep(NA,length(lam)), Eqdirw=rep(NA,length(lam)),
@@ -98,55 +104,31 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
     pxlvis = approx(PARvis, visibility, xout = SatPAR, rule=c(2,2))$y
     
     # get planar total, direct, and diffuse irradiance in w/m2/nm, using gregg-carder
-    # si <- surface_irr(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
-    si <- surface_irr_c(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo)
+    # si <- surface_irr(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo) # R version
+    si <- surface_irr_c(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo) # C++ version
     # above surface
     Ed <- si$Ed
-    Eddir <- si$Eddir
-    Eddif <- si$Eddif
     # below surface
     Eqdirw <- si$Eqdirw
     Eqdifw <- si$Eqdifw
     
-    
-    
-    # 1. ORIGINAL METHOD - SatPAR and GC irrad in planar form
-    #
-    # Now we use Ed and SatPar to scale Eqdirw and Eqdifw
+    # Scale modelled surface irradiance up to satellite PAR
     #   Gregg-Carder units: Watt/m2/nm
     #   SatPAR units: mW/cm2/um
-    # *1000 (W to mW), /10000 (/m2 to /cm2), *1000 (/nm to /um) = *100
-    # Note that we end up with a matrix where row=hour, column=waveband, so we must
-    # take the average light value over the whole day and spectrum to get a result
-    # in the same format at SatPAR (a single average "instantaneous" value for the day)
-    # ScalingPARfactor = SatPAR / (mean(Ed,na.rm=TRUE)*100)
-    # 2021-12-02 FIX: The satellite PAR model takes the average over waveband, and then
-    # integrates over time and divides by 24 hours, giving a slightly different result
-    # than if you were to simply take the average over the whole matrix.
-    ScalingPARfactor = SatPAR / (sum(rowMeans(Ed,na.rm=TRUE))/24*100)
+    # SatPAR averages over waveband, integrates over time, and then divides by 24hrs
+    # (which is why we're using rowMeans over waveband and then sum()/24 over time)
+    # *100 is the extra required unit conversion
+    inds_for_scaling <- which(datepxls %in% datepxl_day) # use hourly light modelled values
+    ScalingPARfactor = SatPAR / (sum(rowMeans(Ed[inds_for_scaling,],na.rm=TRUE))/24*100)
     
-    
-    
-    
-    # # 2. NEW METHOD - SatPAR and GC irrad in scalar form
-    #
-    # # Note that SatPAR is currently in units of mW.cm-2.um-1 (planar, like Gregg-Carder)
-    # # Ed <- Watt_per_m2_to_Mol_per_m2_perhour(Ed, lambda) # change units to mol per m^2 per hour
-    # # Ed <- rowSums(Ed, na.rm=TRUE) # for each hour, integrate across wavebands
-    # # Ed <- sum(Ed, na.rm=TRUE) # integrate over the day to get to einsteins/m2/day
-    # # ScalingPARfactor = SatPAR / Ed # create scaling factor
-    # Ed <- (Eddir + Eddif)/cos(zendR*pi/180) # scalar direct and diffuse, above water surface
-    # ScalingPARfactor = SatPAR * 1.193 / sum(Watt_per_m2_to_Mol_per_m2_perhour(Ed, lambda), na.rm=TRUE)
-    
-    
-    # Note that it's best to avoid using the 1.193 fudge factor for conversion,
-    # so creating the scaling factor using the planar forms (method 1) is likely 
-    # more accurate
-    
+    # Subset to the times you actually want to model
+    inds_for_PP <- which(datepxls %in% datepxl)
+    zendR <- zendR[inds_for_PP]
+    zendw <- zendw[inds_for_PP]
     
     # UNDERWATER DIRECT AND DIFFUSE --- SCALE BY SATELLITE PAR
-    Eqdirw = Eqdirw * ScalingPARfactor
-    Eqdifw = Eqdifw * ScalingPARfactor
+    Eqdirw = Eqdirw[inds_for_PP,] * ScalingPARfactor
+    Eqdifw = Eqdifw[inds_for_PP,] * ScalingPARfactor
     
     # UNDERWATER DIRECT AND DIFFUSE --- PLANAR TO SCALAR
     # We divide the direct irradiance by the in-water sun zenith angle to convert from planar to scalar
@@ -154,55 +136,15 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
     # We divide the diffuse irradiance by 0.833 to convert from planar to scalar, as in Platt and Sathyendranath 1997, page 2624 last paragraph
     Eqdifw = Eqdifw/0.83
     
+    # Make sure E objects are in matrix format, even if the light was only modelled at one time
+    if (length(datepxl)==1) {
+        Eqdirw <- matrix(Eqdirw, nrow=1)
+        Eqdifw <- matrix(Eqdifw, nrow=1)
+    }
+    
     return(list(Eqdifw=Eqdifw, Eqdirw=Eqdirw, zendR=zendR, zendw=zendw))
     
 }
-
-
-# # returns total, direct, and diffuse irradiance in w/m2/nm
-# surface_irr <- function(zendR, lam, oza, ag, aw, sco3, p0, wv, rh, am, wsm, ws, pxlvis, Fo) {
-# 
-#     rad = 180/pi
-# 
-#     # Ed(0+,lambda)
-#     Ed = matrix(0,23,301)
-#     Eddir = matrix(0,23,301)
-#     Eddif = matrix(0,23,301)
-#
-#     # Eq(0-)
-#     Eqdirw = matrix(0,23,301) # direct
-#     Eqdifw = matrix(0,23,301) # diffus
-# 
-#     for (i in 1:23)
-#     {
-# 
-#         if (zendR[i] < 90.)
-#         {
-# 
-#             # above water spectral irradiance
-#             irr.gc = atmodd_v2(rod=0.0, ros=0.0, rad = rad, lam = lam, theta = zendR[i], oza = oza, ag = ag,
-#                                aw = aw, sco3 = sco3, p=p0, wv = wv, rh = rh, am = am, wsm = wsm,
-#                                ws = ws, vis = pxlvis, Fo = Fo)
-#             Ed[i,] = irr.gc$Ed
-#             Eddir[i,] = irr.gc$Edir
-#             Eddif[i,] = irr.gc$Eddif
-# 
-#             # Under water spectral irradiance
-#             res.sfc <- sfcrfl(rad,zendR[i],ws)
-#             irrm.gc = atmodd_v2(rod=res.sfc$rod, ros=res.sfc$ros, rad = rad, lam = lam, theta = zendR[i], oza = oza, ag = ag,
-#                                 aw = aw, sco3 = sco3, p=p0, wv = wv, rh = rh, am = am, wsm = wsm,
-#                                 ws = ws, vis = pxlvis, Fo = Fo)
-#             Eqdirw[i,] = irrm.gc$Edir
-#             Eqdifw[i,] = irrm.gc$Edif
-# 
-#         }
-#     }
-# 
-#     return(list(Ed=Ed, Eddir=Eddir, Eddif=Eddif, Eqdirw=Eqdirw, Eqdifw=Eqdifw))
-# 
-# }
-
-
 
 
 
@@ -213,6 +155,8 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
 # daypxl = 173
 # yearpxl = 2018
 # SatPAR = 24 # scalar PAR, einsteins/m^2/day
+# datepxl <- as_datetime(paste0(pad0(yearpxl,4),pad0(daypxl,3),"1345",format="%Y%j%H%M")) # model light at 1:45pm
+# tz(datepxl) <- "UTC"
 # 
 # # load custom functions and necessary libraries
 # library(oceancolouR)    # for various custom functions
@@ -221,7 +165,7 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR) {#, Cloud) {
 # library(lubridate)
 # sourceCpp("surface_irradiance.cpp")
 # # get surface irradiance and solar zenith angles
-# result <- PAR_resolved(latipxl, daypxl, yearpxl, SatPAR)
+# result <- PAR_resolved(latipxl, daypxl, yearpxl, SatPAR, datepxl)
 # # plot of total planar irradiance just below the surface
 # xhr = 1:23
 # Z = seq(0,120,by=0.5)
