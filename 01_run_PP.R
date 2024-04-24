@@ -59,9 +59,6 @@ num_cl <- NULL # set this to NULL to not use parallel processing
 #*******************************************************************************
 # VARIABLES THAT CAN BE CHANGED
 
-# model to use - BIOv2 only (need to do some reformatting before BIOv1 and Laval can be used with this)
-model <- "BIOv2"
-
 # water column intervals to calculate PP (metres), and the min and max depth
 # depth_data columns will be linearly interpolated to the depths in seq(Zmin,Zmax,by=dz)
 dz <- 0.5
