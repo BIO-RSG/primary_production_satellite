@@ -376,16 +376,16 @@ ays = fracys * aphy443 * exp(-Sy*(lambda-443))
 at = asw + aphy + ays
 
 
-# backscattering by seawater from Morel (1974)
+# scattering by seawater from Morel (1974)
 BW500 = 0.00288
 BW = BW500*(lambda/500)^(-4.3)
 
-# backscattering by phytoplankton
+# scattering by particulates
 BC660 = 0.407 * chla^0.795 # Loisel and Morel (1998), Table 2
 BC = BC660*(660/lambda)^(-log10(chla))
 BC[BC < 0] = 0
 
-# ratio of phytoplankton backscattering to phytoplankton scattering
+# ratio of particulate backscattering to scattering
 bbtilda = (0.78 + 0.42 * (-1) * log10(chla)) * 0.01  # Ulloa et al (1994)
 bbtilda[bbtilda < 0.0005] = 0.0005  
 bbtilda[bbtilda > 0.01] = 0.01  
