@@ -16,18 +16,18 @@ library(patchwork)
 library(dplyr)
 library(DT)
 library(DiagrammeR)
-source("scripts/Gcmod.r")
+source("scripts/other_scripts/Gcmod.r")
 ```
 
 ***
 
 # SUMMARY
 
-The latest version of the BIO primary production (PP) model, *BIOv2*, is explained below. The model calculates PP for a given depth and hour interval by using the model outlined in Platt et al (1991). The following boundaries and resolutions are used:  
+The latest version of the BIO satellite primary production (PP) model, *BIOv2*, is explained below. The model calculates PP for a given depth and hour interval by using the model outlined in Platt et al (1991). The following boundaries and resolutions are used:  
 
-- Light: 400-700nm wavebands at 1nm intervals  
-- Depth: 0-150m depth at 0.5m intervals (down to euphotic depth, i.e. 1% surface PAR)  
-- Time: 0-23 hours at 1hr intervals  
+- Light: 400 to 700nm wavebands at 1nm intervals  
+- Depth: 0 to (maximum) 150m depth at 0.5m intervals (down to euphotic depth, i.e. 1% surface PAR)  
+- Time: 1 to 23 hours at 1hr intervals  
 
 The resulting PP is in units of **mg C / m<sup>2</sup> / day**, and is the total primary production per day in the water column.  
 
@@ -160,7 +160,7 @@ Currently the model uses a uniform profile for satellite PP. Work is ongoing to 
 - Source: Contact author, currently only implemented in the Labrador Sea  
 - 4 regimes: Basin, Shelf, MixPhaeo, HighPhaeo  
 - Modeled based on k-means clustering of in situ HPLC pigments and photosynthetic parameters in the Labrador Sea, assigned to pixels based on gap-filled satellite Chl-a, SST, bathymetry, and day of year  
-- Described in Devred and Clay 2024/2025 (in progress)  
+- Described in Devred et al 2025 (submitted)  
 - Spatial resolution: 4km  
 - Temporal resolution: Daily  
 
@@ -190,6 +190,7 @@ Currently the model uses a uniform profile for satellite PP. Work is ongoing to 
 - Modified version of the Bird model for use in the Maritimes.  
 - Code function includes air-sea interface reflection losses and corrections based on time of year.  
 - Cloud-correction not included. Adjusting by cloud fraction changes the amount of light in the direct and diffuse components and the total value, but we're assuming the main effects are accounted for by scaling the modeled values by satellite PAR later.  
+- Solar zenith angle, used in the calculation for the irradiance and length of day, is computed at longitude=0 degrees and timezone UTC. The angle is the same as if it were calculated at the sample longitude and local time, but the user doesn't need to add information about sample timezone.
 - Required input listed below:  
 
 ```{r, echo=FALSE}
@@ -238,7 +239,7 @@ DT::formatStyle(names(df),lineHeight='80%')
 *NOTES:*  
 
 - Lookup table for visibility: `data/LUT_PAR_lati_day_vis.Rdata`  
-- Function for *sco3*: `R/Gcmod.R/comp_sco3()`  
+- Function for *sco3*: `scripts/other_scripts/Gcmod.R/comp_sco3()`  
 
 <table>
 <tr>
@@ -305,7 +306,11 @@ Table 4: Lookup table for wavelength-dependent Gregg-Carder input.<br>*Fobar* = 
 
 ### Scale surface irradiance by satellite PAR
 
-The modeled surface irradiance must be scaled to PAR calculated by the satellite. Below is the procedure used to convert them to the same units for scaling.  
+The modeled surface irradiance must be scaled to PAR detected by the satellite, i.e.:  
+E<sub>direct</sub> = E<sub>direct</sub> * *PARfactor*  
+E<sub>diffuse</sub> = E<sub>diffuse</sub> * *PARfactor*  
+
+*PARfactor* is calculated by dividing satellite PAR by the equivalent Gregg-Carder modeled value. Below is the procedure used to convert them to the same units to derive this value:  
 
 **Satellite PAR from [NASA OBPG](https://oceancolor.gsfc.nasa.gov/atbd/par/):**  
 Single value of scalar irradiance in units of Einsteins/m<sup>2</sup>/day  
@@ -430,7 +435,7 @@ These steps are repeated for each depth and hour, returning a matrix of PP value
 
 ## STEP 3: INTEGRATE OVER DEPTH AND TIME
 
-The final step is to simply integrate down to the euphotic depth (1% surface PAR, to a maximum of 150m depth) and then time (0-23hrs) to get the total primary production in mg C / m<sup>2</sup> / day.  
+The final step is to simply integrate down to the euphotic depth (1% surface PAR, to a maximum of 150m depth) and then time (1-23hrs) to get the total primary production in mg C / m<sup>2</sup> / day.  
 
 <br>
 
