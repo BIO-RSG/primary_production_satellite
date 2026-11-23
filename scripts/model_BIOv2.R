@@ -10,65 +10,61 @@ lambda = 400:700
 awp <- read.table("data/pope97.dat",skip=6) # absorption of pure sea water according to Pope and Fry (1997)
 asw <- approx(awp[,1],awp[,2],lambda)$y # asw is absorption by pure seawater at wavelengths of interest
 
-# EXAMPLE AT END OF SCRIPT
-
-
 
 #*******************************************************************************
 # PP FUNCTION ####
 
 # THIS RETURNS A MATRIX OF PP VALUES (ROW=DEPTH, COLUMN=TIME)
 
-# i                          # row index of input dataframe
-# input                      # Dataframe containing the following columns:
-#                              For in situ PP: event_id, sample_id, station, latitude, longitude, doy, year, par, depth_data, time_data
-#                              For satellite PP: bin, latitude, longitude, doy, year, par, depth_data, time_data
-#                              (see 01_run_PP.R for details)
-# dz                         # Depth interval (in metres)
-# Zmin, Zmax                 # First and last depth over which PP will be calculated and integrated
-# lambda                     # Vector of wavelengths over which to calculate light
-# uniform_profile            # TRUE/FALSE, are the chla and PI parameter profiles homogeneous?
-#                               *if not, input is assumed to have multiple rows in depth_data and values are linearly interpolated to missing depths
+# i                 # row index of input dataframe
+# input             # Dataframe containing the following columns:
+#                       latitude, longitude, doy, year, par, bathymetry, depth_data, time_data
+#                       (see 01_run_PP.R for details)
+# dz                # Depth interval (in metres)
+# Zmin, Zmax        # First and last depth over which PP will be calculated and integrated
+# uniform_profile   # TRUE/FALSE, assume the water profile is homogeneous? (if TRUE, surface depth_data will be repeated at depth)
 
-calculate_PP <- function(i, input, dz=0.5, Zmin=0, Zmax=150, lambda=400:700, uniform_profile=TRUE) {
-    
-    Rsize <- length(lambda)
-    Z <- seq(Zmin,Zmax,by=dz)
-    nstep <- length(Z)
+calculate_PP <- function(i, input, dz=0.5, Zmin=0, Zmax=150, lambda=400:700, uniform_profile=TRUE, calculate_iops=TRUE) {
     
     df <- input[i,]
     latipxl <- df$latitude
     daypxl <- df$doy
     yearpxl <- df$year
     SatPAR <- df$par
-    depth_data <- df$depth_data[[1]]
+    dd <- df$depth_data[[1]] %>% dplyr::relocate(depth) # make sure first column is depth
     time <- df$time_data[[1]]$time
+    bathy <- df$bathymetry
     
-    # fill depth_data (chl, alphab, pmb) to the required depths
-    if (uniform_profile) {
-        dtmp <- dplyr::bind_rows(data.frame(depth=min(Z)),depth_data) %>% dplyr::arrange(depth)
-        topv <- (dtmp %>% tidyr::fill(-depth, .direction = "downup") %>% dplyr::select(-depth))[1,]
-        dd <- dplyr::bind_cols(data.frame(depth=Z),topv)
-    } else {
-        dtmp <- dplyr::full_join(data.frame(depth=Z),depth_data,by="depth") %>% dplyr::arrange(depth)
-        dd <- try({
-            missing_pi <- !is.finite(dtmp$alphab)
-            missing_chl <- !is.finite(dtmp$chl)
-            dtmp$chl[missing_chl] <- approx(x=dtmp$depth[!missing_chl],y=dtmp$chl[!missing_chl],xout=dtmp$depth[missing_chl],rule=2)$y
-            dtmp$alphab[missing_pi] <- approx(x=dtmp$depth[!missing_pi],y=dtmp$alphab[!missing_pi],xout=dtmp$depth[missing_pi],rule=2)$y
-            dtmp$pmb[missing_pi] <- approx(x=dtmp$depth[!missing_pi],y=dtmp$pmb[!missing_pi],xout=dtmp$depth[missing_pi],rule=2)$y
-            dd <- dtmp
-        }, silent=TRUE)
-        if (class(dd)=="try-error") { # if there's only one point and you can't interpolate, just fill the columns uniformly
-            topv <- (dtmp %>% tidyr::fill(-depth, .direction = "downup") %>% dplyr::select(-depth))[1,]
-            dd <- dplyr::bind_cols(data.frame(depth=Z),topv)
-        }
+    if (calculate_iops) {
+        dd <- dd %>% dplyr::select(depth,chl,alphab,pmb)
     }
     
-    dd <- dd %>% dplyr::filter(depth %in% Z) %>% dplyr::arrange(depth) %>% dplyr::distinct()
+    dd <- dd %>% tidyr::drop_na()
+    
+    # make sure you don't calculate PP below the bottom depth
+    if (bathy<Zmax) {
+        Zmax <- bathy
+        dd <- dd %>% dplyr::filter(depth<=bathy)
+        if (nrow(dd)==0) return(NA)
+    }
+    
+    Rsize <- length(lambda)
+    Z <- seq(Zmin,Zmax,by=dz)
+    nstep <- length(Z)
+    
+    if (!all(dd$depth[1:length(Z)]==Z)) stop("Required input data missing for some depths")
+    
     chlpix <- dd$chl
     alphaB <- dd$alphab
     PBm <- dd$pmb
+    if (!calculate_iops) {
+        if (uniform_profile) {
+            dd[,2:ncol(dd)] <- dd[rep(1,nrow(dd)),2:ncol(dd)]
+        }
+        at <- dd$at %>% do.call(what=rbind)
+        bbt <- dd$bbt %>% do.call(what=rbind)
+        aphy <- dd$aphy %>% do.call(what=rbind)
+    }
     
     
     #*********************************
@@ -132,34 +128,21 @@ calculate_PP <- function(i, input, dz=0.5, Zmin=0, Zmax=150, lambda=400:700, uni
     # Eqdirw and Eqdifw are scalar here, not planar
     # They are also in Watt/m2/nm rather than units with Einsteins
     # As long as the units are compatible with alphaB and PmB units, this works out
-    # In BIOCHEM, alphaB units are mgC/mgChl/hr, and PmB units are C/Chl/hr/Watt/m^2
-    if (uniform_profile) {
-        ui_res <- underwater_irradiance_c(tmp_Eqdirw, tmp_Eqdifw, chlpix[1], nstep, lambda, pc1f, pc2f, ratef, fracys, Sy, asw, tmp_zendR, tmp_zendw, alphaB[1], PBm[1], BW, length(day_times), dz)
+    # In BIOCHEM, alphaB units are C/Chl/hr, and PmB units are C/Chl/hr/Watt/m^2
+    if (calculate_iops) {
+        if (uniform_profile) {
+            ui_res <- underwater_irradiance_c(tmp_Eqdirw, tmp_Eqdifw, chlpix[1], nstep, lambda, pc1f, pc2f, ratef, fracys, Sy, asw, tmp_zendR, tmp_zendw, alphaB[1], PBm[1], BW, length(day_times), dz)
+        } else {
+            ui_res <- underwater_irradiance_NU_c(tmp_Eqdirw, tmp_Eqdifw, chlpix, lambda, pc1f, pc2f, ratef, fracys, Sy, asw, tmp_zendR, tmp_zendw, alphaB, PBm, BW, length(day_times), dz)
+        }
     } else {
-        ui_res <- underwater_irradiance_NU_c(tmp_Eqdirw, tmp_Eqdifw, chlpix, lambda, pc1f, pc2f, ratef, fracys, Sy, asw, tmp_zendR, tmp_zendw, alphaB, PBm, BW, length(day_times), dz)
+        ui_res <- underwater_irradiance_precalIOP_c(tmp_Eqdirw, tmp_Eqdifw, chlpix, lambda, tmp_zendR, tmp_zendw, alphaB, PBm, length(day_times), dz, at, bbt, aphy)
     }
+    
     PP <- E0z <- matrix(nrow=length(Z),ncol=length(datepxl))
     PP[,day_times] <- t(ui_res$PP)
-    E0z[,day_times] <- t(ui_res$E0z)
+    E0z[,day_times] <- t(ui_res$E0z) # E0z is the sum of planar irradiance from 400-700nm at each depth and time interval
     
     return(list(depth_data_filled=dd,PP=PP,E0z=E0z))
     
 }
-
-
-# #*******************************************************************************
-# # EXAMPLE ####
-# 
-# df <- data.frame(event_id=1,sample_id=1,station="station",latitude=57.8,longitude=-51.3,doy=127,year=2014,par=14.1) %>%
-#     dplyr::mutate(depth_data=list(data.frame(depth=1,alphab=0.09,pmb=2.9,chl=0.5)),
-#                   time_data=list(data.frame(time=c(1400,1500))))
-# # load custom functions and necessary libraries
-# library(oceancolouR)    # for various custom functions
-# library(Rcpp)
-# library(RcppArmadillo)
-# library(lubridate)
-# source("scripts/PAR_resolved.R")
-# sourceCpp("scripts/underwater_irradiance.cpp")
-# sourceCpp("scripts/surface_irradiance.cpp")
-# # try with uniform profile
-# results <- calculate_PP(1, df, dz=0.5, Zmin=0, Zmax=150, uniform_profile=TRUE)

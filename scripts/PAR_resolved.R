@@ -5,10 +5,8 @@
 library(lubridate)
 library(oce)
 library(stringr)
-library(fields)
 source("scripts/convert_units.R")
 source("scripts/insol.R")
-# source("surface_irradiance.R")
 
 # Gcmod.r is the Gregg and Carder model, that is used to retrieve the spectral
 # irradiance just under the sea surface: E_d(0-, lambda) in Einstein.m-2
@@ -92,14 +90,13 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR, datepxl) {
     latidx_match = seq(35.0, 80.0, 0.25) # lats of the PARday file, from 35 to 80 in 0.25 degree increments
     if (length(latidx_match) != nrow(PARday)) {
         print("Error with PARday file")
-        break
+        stop()
     } else if (latipxl > 80 | latipxl < 35) {
         return(list(Eqdifw=rep(NA,length(lam)), Eqdirw=rep(NA,length(lam)),
                     zendR=zendR, zendw=zendw))
     }
     latidx = which.min(abs(latidx_match - latipxl))
     # BEFORE: latidx = round((latipxl-35)/0.25) # remove 35 deg because the look-up-table starts at 35 degs
-    
     PARvis = PARday[latidx,daypxl,]
     pxlvis = approx(PARvis, visibility, xout = SatPAR, rule=c(2,2))$y
     
@@ -146,7 +143,6 @@ PAR_resolved <- function(latipxl, daypxl, yearpxl, SatPAR, datepxl) {
     return(list(Eqdifw=Eqdifw, Eqdirw=Eqdirw, zendR=zendR, zendw=zendw))
     
 }
-
 
 
 # #*******************************************************************************

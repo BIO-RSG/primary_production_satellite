@@ -7,10 +7,10 @@ using namespace Rcpp;
 
 // [[Rcpp::export]]
 List underwater_irradiance_c(NumericMatrix Eqdirw, NumericMatrix Eqdifw, double chlz, int nstep,
-                                      NumericVector lambda, NumericVector pc1f, NumericVector pc2f,
-                                      NumericVector ratef, double fracys, double Sy, NumericVector asw,
-                                      NumericVector zendR, NumericVector zendw, double alphaB, double PBm,
-                                      NumericVector BW, double tsize, double dz) {
+                             NumericVector lambda, NumericVector pc1f, NumericVector pc2f,
+                             NumericVector ratef, double fracys, double Sy, NumericVector asw,
+                             NumericVector zendR, NumericVector zendw, double alphaB, double PBm,
+                             NumericVector BW, double tsize, double dz) {
     
     double Rsize = lambda.size();
     NumericMatrix PP(tsize, nstep);
@@ -35,7 +35,7 @@ List underwater_irradiance_c(NumericMatrix Eqdirw, NumericMatrix Eqdifw, double 
     double BC660 = 0.407 * pow(chlz, 0.795); // ici, bc corresponds to b_chl a 660 nm (scattering by chlorophyll-a)
     
     NumericVector BC = BC660*pow((660/lambda),(-log10(chlz))); // BC spectral dependence depends on chlz,
-    // this means that at chl = 1 there is no spectral dependence.This is weird and has to be checked
+    // this means that at chl = 1 tere is no spectral dependence.This is weird and has to be checked
     BC[BC < 0] = 0;
     NumericVector bbt = BC*bbtilda + BW*0.5; // Here, we get total backscattering.
     
@@ -197,45 +197,79 @@ List underwater_irradiance_NU_c(NumericMatrix E0dir, NumericMatrix E0dif, Numeri
     
 }
 
-
-// Source: http://www.cplusplus.com/forum/general/216928/
-// Returns interpolated value at x from parallel arrays ( xData, yData )
-// Assumes that xData has at least two elements, is sorted and is strictly monotonic increasing
-// boolean argument extrapolate determines behaviour beyond ends of array (if needed)
 // [[Rcpp::export]]
-double interpolate( vector<double> &xData, vector<double> &yData, double x, bool extrapolate )
-{
-    int size = xData.size();
+List underwater_irradiance_precalIOP_c(NumericMatrix E0dir, NumericMatrix E0dif, NumericVector chlpix,
+                                       NumericVector lambda, NumericVector zendR, NumericVector zendw,
+                                       NumericVector alphaB, NumericVector PBm, double tsize, double dz,
+                                       NumericMatrix at, NumericMatrix bbt, NumericMatrix aphy) {
     
-    int i = 0;                                                                  // find left end of interval for interpolation
-    if ( x >= xData[size - 2] )                                                 // special case: beyond right end
-    {
-        i = size - 2;
-    }
-    else
-    {
-        while ( x > xData[i+1] ) i++;
-    }
-    double xL = xData[i], yL = yData[i], xR = xData[i+1], yR = yData[i+1];      // points on either side (unless beyond ends)
-    if ( !extrapolate )                                                         // if beyond ends of array and not extrapolating
-    {
-        if ( x < xL ) yR = yL;
-        if ( x > xR ) yL = yR;
-    }
+    double nstep = chlpix.size();
+    double Rsize = lambda.size();
+    NumericMatrix PP(tsize, nstep);
+    NumericMatrix E0z(tsize, nstep); //scalar irradiance at depth z
+    NumericVector atz(Rsize);
+    NumericVector bbtz(Rsize);
+    NumericVector aphyz(Rsize);
+    NumericVector Kddif(Rsize);
+    NumericVector alphaBc(Rsize);
+    NumericVector Knum(Rsize);
+    double chlz;
+    double alphaBz;
+    double PBmz;
+    double apbar;
+    double PIz;
+    NumericMatrix tmp_E0dir(tsize, Rsize);
+    NumericMatrix tmp_E0dif(tsize, Rsize);
     
-    double dydx = ( yR - yL ) / ( xR - xL );                                    // gradient
+    for (int iz=1; iz < nstep; iz++) { // loop on depth, we start at the second step as the first one is Eqdw (note: C++ uses zero-indexing)
+        
+        // get chla, photosynthetic parameters, and IOPs at this depth for light and PP calculations
+        chlz = chlpix[iz];
+        alphaBz = alphaB[iz];
+        PBmz = PBm[iz];
+        atz = at(iz, _);
+        bbtz = bbt(iz, _);
+        aphyz = aphy(iz, _);
+        
+        // Here we compute the photosynthetic action spectrum according to Kyewangala et al. 1997
+        apbar = mean(aphyz);
+        alphaBc = alphaBz * aphyz / apbar;
+        
+        Knum = -dz * (atz + bbtz);
+        Kddif = exp(Knum / 0.83);
+        
+        if (iz==1) {
+            for (int it=0; it < tsize; it++) {
+                // calculate PP for surface irradiance
+                PIz = sum(alphaBc * (E0dir(it, _) + E0dif(it, _)));
+                PP(it, 0) = chlz * PIz/sqrt(1 + pow((PIz/PBmz),2));
+                E0z(it, 0) = sum(E0dir(it, _) + E0dif(it, _));
+                // calculate attenuated light for second depth
+                tmp_E0dir(it, _) = E0dir(it, _) * exp(Knum / cos(zendw[it]));
+                tmp_E0dif(it, _) = E0dif(it, _) * Kddif;
+                // calculate PP for second depth
+                PIz = sum(alphaBc * (tmp_E0dir(it, _) + tmp_E0dif(it, _)));
+                PP(it, 1) = chlz * PIz/sqrt(1 + pow((PIz/PBmz),2)); // Caverhill and Platt 1991, equation 4
+                E0z(it, 1) = sum(tmp_E0dir(it, _) + tmp_E0dif(it, _));
+            }
+        } else {
+            for (int it=0; it < tsize; it++) {
+                // calculate attenuated light for this depth
+                tmp_E0dir(it, _) = tmp_E0dir(it, _) * exp(Knum / cos(zendw[it]));
+                tmp_E0dif(it, _) = tmp_E0dif(it, _) * Kddif;
+                // calculate PP for this depth
+                PIz = sum(alphaBc * (tmp_E0dir(it, _) + tmp_E0dif(it, _)));
+                PP(it, iz) = chlz * PIz/sqrt(1 + pow((PIz/PBmz),2)); // Caverhill and Platt 1991, equation 4
+                E0z(it, iz) = sum(tmp_E0dir(it, _) + tmp_E0dif(it, _));
+            }
+        }
+        
+    } // end loop on depth
     
-    return yL + dydx * ( x - xL );                                              // linear interpolation
+    List Output;
+    Output["PP"] = PP;
+    Output["E0z"] = E0z;
+    return(Output);
+    
 }
-
-// [[Rcpp::export]]
-vector<double> higher_res(vector<double> xold, vector<double> xnew, vector<double> yold) {
-    vector<double> ynew;
-    for ( double x : xnew ) {
-        double ynew_tmp = interpolate( xold, yold, x, true );
-        ynew.push_back( ynew_tmp );
-    }
-    return(ynew);
-}
-
 
