@@ -31,7 +31,9 @@ calculate_PP <- function(i, input, dz=0.5, Zmin=0, Zmax=150, lambda=400:700, uni
     daypxl <- df$doy
     yearpxl <- df$year
     SatPAR <- df$par
-    dd <- df$depth_data[[1]] %>% dplyr::relocate(depth) # make sure first column is depth
+    dd <- df$depth_data[[1]] %>%
+        dplyr::arrange(depth) %>% # make sure dataframe is arranged from shallow to deep values
+        dplyr::relocate(depth) # make sure first column is depth
     time <- df$time_data[[1]]$time
     bathy <- df$bathymetry
     
